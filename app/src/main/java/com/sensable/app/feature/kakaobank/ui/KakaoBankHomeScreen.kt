@@ -3,39 +3,20 @@ package com.sensable.app.feature.kakaobank.ui
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AccountBalance
-import androidx.compose.material.icons.filled.AllInbox
-import androidx.compose.material.icons.filled.CreditCard
-import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.Menu
-import androidx.compose.material.icons.filled.Notifications
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
-import androidx.compose.material3.NavigationBarItemDefaults
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.res.painterResource
@@ -51,7 +32,8 @@ import com.sensable.app.feature.braille.ui.BrailleBottomSheet
 import com.sensable.app.feature.kakaobank.viewmodel.KakaoBankViewModel
 import com.sensable.app.ui.theme.SensableTheme
 
-private val KakaoBackground = Color(0xFFFFFF)
+private val KakaoBackground = Color(0xFFF7F7F7)
+private val KakaoBlue = Color(0xFFA2B5E8)
 
 private data class BottomNavItem(
     val label: String,
@@ -88,6 +70,7 @@ fun KakaoBankHomeContent(
     navController: NavController
 ) {
     var selectedNavIndex by remember { mutableIntStateOf(0) }
+    val scrollState = rememberScrollState()
 
     Scaffold(
         topBar = {
@@ -115,19 +98,19 @@ fun KakaoBankHomeContent(
             Column(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(horizontal = 24.dp, vertical = 16.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
+                    .verticalScroll(scrollState)
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                Image(
-                    painter = painterResource(id = R.drawable.logo_kakaobank),
-                    contentDescription = "카카오뱅크 로고",
-                    modifier = Modifier.height(48.dp)
-                )
-                Spacer(modifier = Modifier.height(16.dp))
-                Text(
-                    text = "위로 스와이프 → 점자 인터페이스",
-                    style = MaterialTheme.typography.bodyMedium
-                )
+                BannerSection()
+                AccountCard(userName = "김예은", balance = "1원")
+                ServicePromotionCard()
+                AddServiceCard()
+                FooterLinks()
+                QuickAccessGrid()
+                
+                Spacer(modifier = Modifier.height(32.dp))
             }
 
             if (isBrailleVisible) {
@@ -140,17 +123,247 @@ fun KakaoBankHomeContent(
     }
 }
 
+@Composable
+private fun BannerSection() {
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(100.dp),
+        color = Color.White,
+        shape = RoundedCornerShape(20.dp)
+    ) {
+        Box(contentAlignment = Alignment.Center) {
+            Text("배너 영역 (이미지 예정)", color = Color.LightGray, fontSize = 14.sp)
+        }
+    }
+}
+
+@Composable
+private fun AccountCard(userName: String, balance: String) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        color = KakaoBlue,
+        shape = RoundedCornerShape(20.dp)
+    ) {
+        Column(
+            modifier = Modifier.padding(24.dp)
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        modifier = Modifier
+                            .size(32.dp)
+                            .clip(CircleShape)
+                            .background(Color.White.copy(alpha = 0.3f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Image(
+                            painter = painterResource(id = R.drawable.logo_kakaobank),
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp),
+                            colorFilter = ColorFilter.tint(Color.White)
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Text(
+                        text = "${userName}의 통장 ★",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = Color.Black.copy(alpha = 0.8f)
+                    )
+                }
+                Icon(
+                    imageVector = Icons.Default.MoreHoriz,
+                    contentDescription = null,
+                    tint = Color.Black.copy(alpha = 0.6f)
+                )
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Text(
+                text = balance,
+                style = MaterialTheme.typography.headlineMedium,
+                fontWeight = FontWeight.Bold,
+                color = Color.Black,
+                modifier = Modifier.padding(start = 44.dp)
+            )
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            Row(
+                modifier = Modifier.align(Alignment.End),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                AccountSmallButton(text = "카드")
+                AccountSmallButton(text = "이체")
+            }
+        }
+    }
+}
+
+@Composable
+private fun AccountSmallButton(text: String) {
+    Surface(
+        color = Color.Black.copy(alpha = 0.05f),
+        shape = RoundedCornerShape(8.dp),
+        onClick = {}
+    ) {
+        Text(
+            text = text,
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Medium
+        )
+    }
+}
+
+@Composable
+private fun ServicePromotionCard() {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        color = Color.White,
+        shape = RoundedCornerShape(20.dp)
+    ) {
+        Row(
+            modifier = Modifier.padding(24.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(40.dp)
+                    .background(Color(0xFFFFE0B2), RoundedCornerShape(8.dp))
+            )
+            Spacer(modifier = Modifier.width(16.dp))
+            Column {
+                Text(
+                    text = "은행, 병원, 편의점 어디서나",
+                    fontSize = 12.sp,
+                    color = Color.Gray
+                )
+                Text(
+                    text = "이제 신분증도 앱으로",
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun AddServiceCard() {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        color = Color.White,
+        shape = RoundedCornerShape(20.dp),
+        onClick = {}
+    ) {
+        Box(
+            modifier = Modifier.padding(16.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(Icons.Default.Add, contentDescription = null, tint = Color.LightGray)
+        }
+    }
+}
+
+@Composable
+private fun FooterLinks() {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 24.dp),
+        horizontalArrangement = Arrangement.Center,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text("간편 홈", fontSize = 14.sp, color = Color.Gray)
+        Spacer(modifier = Modifier.width(16.dp))
+        Box(
+            modifier = Modifier
+                .height(12.dp)
+                .width(1.dp)
+                .background(Color.LightGray)
+        )
+        Spacer(modifier = Modifier.width(16.dp))
+        Text("화면 편집", fontSize = 14.sp, color = Color.Gray)
+    }
+}
+
+@Composable
+private fun QuickAccessGrid() {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        QuickAccessCard("신용대출\n비교하기", weight = 1f)
+        QuickAccessCard("응모하고\n혜택받기", weight = 1f)
+        QuickAccessCard("생활비\n돌려받기", weight = 1f)
+    }
+}
+
+@Composable
+private fun RowScope.QuickAccessCard(title: String, weight: Float) {
+    Surface(
+        modifier = Modifier
+            .weight(weight)
+            .aspectRatio(0.85f),
+        color = Color.White,
+        shape = RoundedCornerShape(20.dp)
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.SpaceBetween
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(32.dp)
+                    .background(Color(0xFFE3F2FD), CircleShape)
+            )
+            Text(
+                text = title,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Bold,
+                lineHeight = 20.sp
+            )
+        }
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun KakaoBankTopBar(userName: String) {
     TopAppBar(
         title = {
-            Text(
-                text = "${userName}님",
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold,
-                color = Color.Black
-            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = userName,
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.Black
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Surface(
+                    shape = RoundedCornerShape(16.dp),
+                    color = Color(0xFFEEEEEE),
+                    modifier = Modifier.height(28.dp)
+                ) {
+                    Box(
+                        modifier = Modifier.padding(horizontal = 10.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "내 계좌",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.Black
+                        )
+                    }
+                }
+            }
         },
         actions = {
             IconButton(onClick = {}) {
@@ -162,7 +375,7 @@ private fun KakaoBankTopBar(userName: String) {
             }
         },
         colors = TopAppBarDefaults.topAppBarColors(
-            containerColor = Color.White
+            containerColor = KakaoBackground
         )
     )
 }
