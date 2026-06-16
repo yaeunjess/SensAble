@@ -1,0 +1,32 @@
+# Gradle
+.gradle/
+build/
+
+# IDE - IntelliJ IDEA / Android Studio
+.idea/
+*.iml
+*.iws
+*.ipr
+
+# Local configuration
+local.properties
+
+# Kotlin
+.kotlin/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Build artifacts
+captures/
+.externalNativeBuild/
+.cxx/
+
+# Secrets & Keys
+secrets.properties
+*.jks
+*.keystore
+
+# Logs
+*.log

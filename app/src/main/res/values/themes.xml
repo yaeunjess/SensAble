@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <style name="Theme.Sensable" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="postSplashScreenTheme">@style/Theme.Sensable</item>
+    </style>
+
+    <style name="Theme.Sensable.Splash" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">#FFEB00</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/splash_icon</item>
+        <item name="windowSplashScreenIconBackgroundColor">#FFEB00</item>
+        <item name="postSplashScreenTheme">@style/Theme.Sensable</item>
+    </style>
+
+</resources>
