@@ -3,6 +3,7 @@
 
     <style name="Theme.Sensable" parent="android:Theme.Material.Light.NoActionBar">
         <item name="postSplashScreenTheme">@style/Theme.Sensable</item>
+        <item name="android:windowLightStatusBar">true</item>
     </style>
 
     <style name="Theme.Sensable.Splash" parent="Theme.SplashScreen">
