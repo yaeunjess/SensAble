@@ -3,6 +3,7 @@ package com.sensable.app.feature.braille.viewmodel
 import androidx.lifecycle.ViewModel
 import com.sensable.app.core.braille.BrailleDecoder
 import com.sensable.app.core.braille.KoreanBrailleStateMachine
+import com.sensable.app.core.tts.TtsManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -11,14 +12,21 @@ import kotlinx.coroutines.flow.update
 import javax.inject.Inject
 
 @HiltViewModel
-class BrailleViewModel @Inject constructor() : ViewModel() {
+class BrailleViewModel @Inject constructor(
+    private val ttsManager: TtsManager
+) : ViewModel() {
 
     private val _uiState = MutableStateFlow(BrailleUiState())
     val uiState: StateFlow<BrailleUiState> = _uiState.asStateFlow()
 
     private val koreanStateMachine = KoreanBrailleStateMachine()
 
+    init {
+        ttsManager.speak("어떤 서비스를 이용하시겠습니까?")
+    }
+
     fun onBrailleButtonClick(dot: Int) {
+        ttsManager.speak(dot.toString())
         when (_uiState.value.mode) {
             BrailleMode.SERVICE_SELECT -> handleServiceSelect(dot)
             BrailleMode.TRANSFER_RECIPIENT,
@@ -28,6 +36,7 @@ class BrailleViewModel @Inject constructor() : ViewModel() {
 
     private fun handleServiceSelect(dot: Int) {
         if (dot == 1) {
+            ttsManager.speakQueued("누구에게 보낼까요?")
             _uiState.update {
                 it.copy(
                     mode = BrailleMode.TRANSFER_RECIPIENT,
@@ -39,8 +48,12 @@ class BrailleViewModel @Inject constructor() : ViewModel() {
 
     private fun toggleDot(dot: Int) {
         val current = _uiState.value.currentCellDots
-        val updated = if (dot in current) current - dot else current + dot
-        _uiState.update { it.copy(currentCellDots = updated) }
+        if (dot in current) {
+            ttsManager.speak("$dot 취소")
+            _uiState.update { it.copy(currentCellDots = current - dot) }
+        } else {
+            _uiState.update { it.copy(currentCellDots = current + dot) }
+        }
     }
 
     fun onSwipeRight() {
@@ -63,12 +76,21 @@ class BrailleViewModel @Inject constructor() : ViewModel() {
             koreanStateMachine.process(dots)
         }
 
+        val newPendingDisplay = if (!state.isNumberMode) koreanStateMachine.getPendingDisplay() else ""
         val newText = state.inputText + decoded
+
+        if (decoded.isNotEmpty()) {
+            val spoken = if (state.mode == BrailleMode.TRANSFER_AMOUNT) "${newText}원" else decoded
+            ttsManager.speak(spoken)
+            if (newPendingDisplay.isNotEmpty()) ttsManager.speakQueued(newPendingDisplay)
+        } else if (newPendingDisplay.isNotEmpty()) {
+            ttsManager.speak(newPendingDisplay)
+        }
         _uiState.update {
             it.copy(
                 currentCellDots = emptySet(),
                 inputText = newText,
-                pendingDisplay = if (!state.isNumberMode) koreanStateMachine.getPendingDisplay() else "",
+                pendingDisplay = newPendingDisplay,
             )
         }
     }
@@ -82,6 +104,7 @@ class BrailleViewModel @Inject constructor() : ViewModel() {
 
         when (state.mode) {
             BrailleMode.TRANSFER_RECIPIENT -> {
+                ttsManager.speak("${finalText}님에게 얼마를 보낼까요?")
                 _uiState.update {
                     it.copy(
                         mode = BrailleMode.TRANSFER_AMOUNT,
@@ -90,7 +113,7 @@ class BrailleViewModel @Inject constructor() : ViewModel() {
                         inputText = "",
                         pendingDisplay = "",
                         currentCellDots = emptySet(),
-                        isNumberMode = true,  // 금액은 항상 숫자 — prefix 불필요
+                        isNumberMode = true,
                     )
                 }
             }

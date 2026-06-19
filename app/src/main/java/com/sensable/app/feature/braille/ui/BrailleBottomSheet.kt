@@ -103,7 +103,7 @@ internal fun BrailleBottomSheetContent(
             // 금액 입력 단계에서 수취인 이름 표시
             if (mode == BrailleMode.TRANSFER_AMOUNT && recipientName.isNotEmpty()) {
                 Text(
-                    text = "${recipientName}에게",
+                    text = "${recipientName}님에게",
                     style = MaterialTheme.typography.titleMedium.copy(
                         fontWeight = FontWeight.SemiBold,
                         color = Color(0xFF00897B)
