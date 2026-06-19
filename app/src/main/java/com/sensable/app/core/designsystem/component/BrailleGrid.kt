@@ -1,8 +1,13 @@
 package com.sensable.app.core.designsystem.component
 
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -12,9 +17,12 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -23,16 +31,56 @@ import com.sensable.app.ui.theme.KakaoYellow
 import com.sensable.app.ui.theme.SensableTheme
 
 /**
- * 3행 2열 점자 인터페이스 그리드.
- * 버튼 번호: [row=0,col=0]=1, [row=0,col=1]=2, ..., [row=2,col=1]=6
+ * 3행 2열 점자 인터페이스 그리드 — 쓰기 방향 기준.
+ *
+ * 점자는 종이 뒤에서 찍고 앞에서 읽으므로 입력 UI는 쓰기 방향(좌우 반전)으로 배치.
+ *
+ *   화면(쓰기 방향):    표준 점자(읽기 방향):
+ *   [4] [1]             [1] [4]
+ *   [5] [2]      vs     [2] [5]
+ *   [6] [3]             [3] [6]
  */
+private class SwipeState {
+    var totalDrag = 0f
+    var hasFired = false
+}
+
 @Composable
 fun BrailleGrid(
-    onButtonClick: (row: Int, col: Int) -> Unit,
+    onButtonClick: (dot: Int) -> Unit,
+    onSwipeRight: () -> Unit,
+    pressedDots: Set<Int> = emptySet(),
+    onDoubleTap: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
+    val swipe = remember { SwipeState() }
+
+    var columnModifier = modifier
+        .fillMaxWidth()
+        .pointerInput(Unit) {
+            detectHorizontalDragGestures(
+                onDragStart = {
+                    swipe.totalDrag = 0f
+                    swipe.hasFired = false
+                },
+                onHorizontalDrag = { _, delta ->
+                    swipe.totalDrag += delta
+                    if (swipe.totalDrag > 80f && !swipe.hasFired) {
+                        swipe.hasFired = true
+                        onSwipeRight()
+                    }
+                }
+            )
+        }
+
+    if (onDoubleTap != null) {
+        columnModifier = columnModifier.pointerInput("doubleTap") {
+            detectTapGestures(onDoubleTap = { onDoubleTap() })
+        }
+    }
+
     Column(
-        modifier = modifier.fillMaxWidth(),
+        modifier = columnModifier,
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         repeat(3) { row ->
@@ -40,15 +88,18 @@ fun BrailleGrid(
                 modifier = Modifier
                     .fillMaxWidth()
                     .weight(1f),
-                horizontalArrangement = Arrangement.spacedBy(16.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 repeat(2) { col ->
+                    val dotNumber = row + (1 - col) * 3 + 1
                     BrailleButton(
-                        label = "${row * 2 + col + 1}",
-                        onClick = { onButtonClick(row, col) },
+                        label = "$dotNumber",
+                        isPressed = dotNumber in pressedDots,
+                        onClick = { onButtonClick(dotNumber) },
                         modifier = Modifier.weight(1f)
                     )
+                    // 왼쪽 버튼(col=0) 다음에 넓은 중앙 공간 — 더블탭 영역
+                    if (col == 0) Spacer(modifier = Modifier.weight(0.6f))
                 }
             }
         }
@@ -60,7 +111,8 @@ fun BrailleGrid(
 private fun BrailleGridPreview() {
     SensableTheme {
         BrailleGrid(
-            onButtonClick = { _, _ -> },
+            onButtonClick = { _ -> },
+            onSwipeRight = {},
             modifier = Modifier.padding(16.dp)
         )
     }
@@ -69,16 +121,22 @@ private fun BrailleGridPreview() {
 @Composable
 private fun BrailleButton(
     label: String,
+    isPressed: Boolean,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isTouching by interactionSource.collectIsPressedAsState()
+    val active = isPressed || isTouching
+
     Button(
         onClick = onClick,
         shape = CircleShape,
         modifier = modifier.aspectRatio(1f),
+        interactionSource = interactionSource,
         colors = ButtonDefaults.buttonColors(
-            containerColor = KakaoYellow,
-            contentColor = Color.Black
+            containerColor = if (active) KakaoYellow else Color(0xFFDDDDDD),
+            contentColor = if (active) Color.Black else Color.Gray
         )
     ) {
         Text(text = label, fontSize = 36.sp)
