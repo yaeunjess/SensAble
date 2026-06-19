@@ -13,6 +13,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -65,7 +66,10 @@ internal fun BrailleBottomSheetContent(
         Text(
             text = guideMessage,
             style = MaterialTheme.typography.titleLarge,
-            modifier = Modifier.padding(bottom = 32.dp)
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 16.dp),
+            textAlign = TextAlign.Center
         )
 
         BrailleGrid(
@@ -80,7 +84,7 @@ internal fun BrailleBottomSheetContent(
 private fun BrailleBottomSheetContentPreview() {
     SensableTheme {
         BrailleBottomSheetContent(
-            guideMessage = "어떤 서비스를 이용하시겠습니까?",
+            guideMessage = "무엇을 도와드릴까요?",
             onButtonClick = { _, _ -> },
             modifier = Modifier
                 .fillMaxWidth()
