@@ -38,9 +38,11 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
 import androidx.navigation.compose.rememberNavController
 import com.sensable.app.core.navigation.Screen
+import com.sensable.app.feature.transfer.viewmodel.TransferCompleteViewModel
 import com.sensable.app.ui.theme.KakaoYellow
 import com.sensable.app.ui.theme.SensableTheme
 
@@ -49,6 +51,7 @@ fun TransferCompleteScreen(
     navController: NavController,
     recipient: String = "이지영",
     amount: String = "50000",
+    viewModel: TransferCompleteViewModel = hiltViewModel()
 ) {
     val formattedAmount = formatAmount(amount)
     val scrollState = rememberScrollState()

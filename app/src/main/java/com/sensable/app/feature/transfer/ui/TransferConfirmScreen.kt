@@ -25,9 +25,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
 import androidx.navigation.compose.rememberNavController
 import com.sensable.app.core.navigation.Screen
+import com.sensable.app.feature.transfer.viewmodel.TransferConfirmViewModel
 import com.sensable.app.ui.theme.KakaoYellow
 import com.sensable.app.ui.theme.SensableTheme
 
@@ -36,6 +38,7 @@ fun TransferConfirmScreen(
     navController: NavController,
     recipient: String = "이지영",
     amount: String = "50000",
+    viewModel: TransferConfirmViewModel = hiltViewModel()
 ) {
     val formattedAmount = formatAmount(amount)
 
