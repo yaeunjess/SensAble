@@ -24,5 +24,5 @@ class KakaoBankViewModel @Inject constructor() : ViewModel() {
 }
 
 data class KakaoBankUiState(
-    val isBrailleVisible: Boolean = false
+    val isBrailleVisible: Boolean = true
 )

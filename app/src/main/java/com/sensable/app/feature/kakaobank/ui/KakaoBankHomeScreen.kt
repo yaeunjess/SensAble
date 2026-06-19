@@ -2,7 +2,6 @@ package com.sensable.app.feature.kakaobank.ui
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -18,10 +17,12 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -71,6 +72,16 @@ fun KakaoBankHomeContent(
 ) {
     var selectedNavIndex by remember { mutableIntStateOf(0) }
     val scrollState = rememberScrollState()
+    val nestedScrollConnection = remember {
+        object : NestedScrollConnection {
+            override suspend fun onPreFling(available: Velocity): Velocity {
+                if (available.y < -500f) {
+                    onSwipeUp()
+                }
+                return Velocity.Zero
+            }
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -89,11 +100,7 @@ fun KakaoBankHomeContent(
                 .fillMaxSize()
                 .padding(innerPadding)
                 .background(KakaoBackground)
-                .pointerInput(Unit) {
-                    detectVerticalDragGestures { _, dragAmount ->
-                        if (dragAmount < -50f) onSwipeUp()
-                    }
-                }
+                .nestedScroll(nestedScrollConnection)
         ) {
             Column(
                 modifier = Modifier
@@ -103,7 +110,7 @@ fun KakaoBankHomeContent(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                BannerSection()
+                // BannerSection()
                 AccountCard(userName = "김예은", balance = "1원")
                 ServicePromotionCard()
                 AddServiceCard()
