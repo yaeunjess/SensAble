@@ -42,9 +42,9 @@ fun BrailleBottomSheet(
                 viewModel.onBrailleButtonClick(
                     row = row,
                     col = col,
-                    onTransferSelected = {
+                    onNavigateToConfirm = {
                         onDismiss()
-                        navController.navigate(Screen.Transfer.route)
+                        navController.navigate(Screen.TransferConfirm.route)
                     }
                 )
             },

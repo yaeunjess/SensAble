@@ -5,7 +5,8 @@ import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import com.sensable.app.feature.kakaobank.ui.KakaoBankHomeScreen
-import com.sensable.app.feature.transfer.ui.TransferScreen
+import com.sensable.app.feature.transfer.ui.TransferConfirmScreen
+import com.sensable.app.feature.transfer.ui.TransferCompleteScreen
 
 @Composable
 fun AppNavGraph(navController: NavHostController) {
@@ -16,8 +17,11 @@ fun AppNavGraph(navController: NavHostController) {
         composable(Screen.KakaoBankHome.route) {
             KakaoBankHomeScreen(navController = navController)
         }
-        composable(Screen.Transfer.route) {
-            TransferScreen(navController = navController)
+        composable(Screen.TransferConfirm.route) {
+            TransferConfirmScreen(navController = navController)
+        }
+        composable(Screen.TransferComplete.route) {
+            TransferCompleteScreen(navController = navController)
         }
     }
 }

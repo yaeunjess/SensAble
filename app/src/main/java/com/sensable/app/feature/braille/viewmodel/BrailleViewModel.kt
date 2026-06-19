@@ -14,18 +14,40 @@ class BrailleViewModel @Inject constructor() : ViewModel() {
     private val _uiState = MutableStateFlow(BrailleUiState())
     val uiState: StateFlow<BrailleUiState> = _uiState.asStateFlow()
 
-    fun onBrailleButtonClick(row: Int, col: Int, onTransferSelected: () -> Unit) {
+    fun onBrailleButtonClick(row: Int, col: Int, onNavigateToConfirm: () -> Unit) {
         when (_uiState.value.mode) {
-            BrailleMode.SERVICE_SELECT -> handleServiceSelect(row, col, onTransferSelected)
+            BrailleMode.SERVICE_SELECT -> handleServiceSelect(row, col)
+            BrailleMode.TRANSFER_RECIPIENT -> handleRecipientInput()
+            BrailleMode.TRANSFER_AMOUNT -> handleAmountInput(onNavigateToConfirm)
         }
     }
 
-    private fun handleServiceSelect(row: Int, col: Int, onTransferSelected: () -> Unit) {
-        val isTopLeft = row == 0 && col == 0
-        if (isTopLeft) {
-            _uiState.update { it.copy(mode = BrailleMode.SERVICE_SELECT) }
-            onTransferSelected()
+    private fun handleServiceSelect(row: Int, col: Int) {
+        if (row == 0 && col == 0) {
+            _uiState.update {
+                it.copy(
+                    mode = BrailleMode.TRANSFER_RECIPIENT,
+                    guideMessage = "누구에게 보낼까요?"
+                )
+            }
         }
+    }
+
+    private fun handleRecipientInput() {
+        _uiState.update {
+            it.copy(
+                mode = BrailleMode.TRANSFER_AMOUNT,
+                guideMessage = "000에게 얼마를 보낼까요?"
+            )
+        }
+    }
+
+    private fun handleAmountInput(onNavigateToConfirm: () -> Unit) {
+        onNavigateToConfirm()
+    }
+
+    fun reset() {
+        _uiState.update { BrailleUiState() }
     }
 }
 
@@ -35,5 +57,7 @@ data class BrailleUiState(
 )
 
 enum class BrailleMode {
-    SERVICE_SELECT
+    SERVICE_SELECT,
+    TRANSFER_RECIPIENT,
+    TRANSFER_AMOUNT
 }

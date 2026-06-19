@@ -14,9 +14,12 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.sensable.app.ui.theme.KakaoYellow
 import com.sensable.app.ui.theme.SensableTheme
 
 /**
@@ -74,7 +77,8 @@ private fun BrailleButton(
         shape = CircleShape,
         modifier = modifier.aspectRatio(1f),
         colors = ButtonDefaults.buttonColors(
-            containerColor = MaterialTheme.colorScheme.primary
+            containerColor = KakaoYellow,
+            contentColor = Color.Black
         )
     ) {
         Text(text = label, fontSize = 36.sp)
