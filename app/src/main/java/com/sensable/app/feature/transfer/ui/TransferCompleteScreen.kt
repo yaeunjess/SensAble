@@ -45,13 +45,17 @@ import com.sensable.app.ui.theme.KakaoYellow
 import com.sensable.app.ui.theme.SensableTheme
 
 @Composable
-fun TransferCompleteScreen(navController: NavController) {
+fun TransferCompleteScreen(
+    navController: NavController,
+    recipient: String = "이지영",
+    amount: String = "50000",
+) {
+    val formattedAmount = formatAmount(amount)
     val scrollState = rememberScrollState()
 
     Scaffold(
         containerColor = Color.White,
         bottomBar = {
-            // 공유하기 & 확인 버튼
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -59,34 +63,25 @@ fun TransferCompleteScreen(navController: NavController) {
                     .padding(24.dp),
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                // 공유하기 버튼
                 Button(
                     onClick = { /* 공유 기능 */ },
-                    modifier = Modifier
-                        .weight(0.25f)
-                        .height(60.dp),
+                    modifier = Modifier.weight(0.25f).height(60.dp),
                     shape = RoundedCornerShape(12.dp),
                     colors = ButtonDefaults.buttonColors(
                         containerColor = Color(0xFF3B4055),
                         contentColor = Color.White
                     )
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.Share,
-                        contentDescription = "공유하기"
-                    )
+                    Icon(imageVector = Icons.Default.Share, contentDescription = "공유하기")
                 }
 
-                // 확인 버튼
                 Button(
                     onClick = {
                         navController.navigate(Screen.KakaoBankHome.route) {
                             popUpTo(0) { inclusive = true }
                         }
                     },
-                    modifier = Modifier
-                        .weight(0.75f)
-                        .height(60.dp),
+                    modifier = Modifier.weight(0.75f).height(60.dp),
                     shape = RoundedCornerShape(12.dp),
                     colors = ButtonDefaults.buttonColors(
                         containerColor = KakaoYellow,
@@ -107,7 +102,6 @@ fun TransferCompleteScreen(navController: NavController) {
                 .padding(innerPadding)
                 .padding(horizontal = 24.dp, vertical = 32.dp)
         ) {
-            // 중앙 콘텐츠 영역
             Column(
                 modifier = Modifier
                     .weight(1f)
@@ -116,7 +110,6 @@ fun TransferCompleteScreen(navController: NavController) {
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center
             ) {
-                // 상단 체크 아이콘
                 Surface(
                     modifier = Modifier.size(80.dp),
                     shape = CircleShape,
@@ -131,15 +124,14 @@ fun TransferCompleteScreen(navController: NavController) {
                         )
                     }
                 }
-                
+
                 Spacer(modifier = Modifier.height(32.dp))
 
-                // 메인 텍스트
                 Text(
                     text = buildAnnotatedString {
-                        append("이지영님에게\n")
+                        append("${recipient}님에게\n")
                         withStyle(style = SpanStyle(color = Color(0xFF00897B))) {
-                            append("50,000원")
+                            append(formattedAmount)
                         }
                         append(" 보냈어요")
                     },
@@ -149,10 +141,9 @@ fun TransferCompleteScreen(navController: NavController) {
                     ),
                     textAlign = TextAlign.Center
                 )
-                
+
                 Spacer(modifier = Modifier.height(12.dp))
-                
-                // 계좌 정보
+
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.Center
@@ -173,6 +164,12 @@ fun TransferCompleteScreen(navController: NavController) {
             }
         }
     }
+}
+
+/** 원화 금액 포맷: "50000" → "50,000원" */
+internal fun formatAmount(amount: String): String {
+    val num = amount.toLongOrNull() ?: return "${amount}원"
+    return "%,d원".format(num)
 }
 
 @Preview(showBackground = true, name = "이체 완료")

@@ -32,13 +32,20 @@ import com.sensable.app.ui.theme.KakaoYellow
 import com.sensable.app.ui.theme.SensableTheme
 
 @Composable
-fun TransferConfirmScreen(navController: NavController) {
+fun TransferConfirmScreen(
+    navController: NavController,
+    recipient: String = "이지영",
+    amount: String = "50000",
+) {
+    val formattedAmount = formatAmount(amount)
+
     Scaffold(
         containerColor = Color.White,
         bottomBar = {
-            // 확인 버튼
             Button(
-                onClick = { navController.navigate(Screen.TransferComplete.route) },
+                onClick = {
+                    navController.navigate(Screen.TransferComplete.createRoute(recipient, amount))
+                },
                 modifier = Modifier
                     .fillMaxWidth()
                     .navigationBarsPadding()
@@ -65,9 +72,8 @@ fun TransferConfirmScreen(navController: NavController) {
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
-            // 수취인과 송금액
             Text(
-                text = "이지영님께",
+                text = "${recipient}님께",
                 style = MaterialTheme.typography.headlineSmall.copy(
                     fontWeight = FontWeight.Bold,
                     color = Color(0xFF00897B)
@@ -75,15 +81,12 @@ fun TransferConfirmScreen(navController: NavController) {
                 textAlign = TextAlign.Center
             )
             Text(
-                text = "500,000원",
-                style = MaterialTheme.typography.headlineMedium.copy(
-                    fontWeight = FontWeight.Bold
-                ),
+                text = formattedAmount,
+                style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Bold),
                 textAlign = TextAlign.Center,
                 modifier = Modifier.padding(top = 8.dp, bottom = 48.dp)
             )
 
-            // 중앙 정보 카드
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(16.dp),
@@ -92,8 +95,8 @@ fun TransferConfirmScreen(navController: NavController) {
             ) {
                 Column(modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)) {
                     InfoRow(label = "보내는 분", value = "김예은")
-                    InfoRow(label = "받는 분", value = "이지영")
-                    InfoRow(label = "금액", value = "50,000원", valueColor = Color(0xFF00897B))
+                    InfoRow(label = "받는 분", value = recipient)
+                    InfoRow(label = "금액", value = formattedAmount, valueColor = Color(0xFF00897B))
                     InfoRow(label = "이체 후 잔액", value = "1,500,000원", showDivider = false)
                 }
             }
@@ -115,11 +118,7 @@ private fun InfoRow(
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.bodyMedium,
-            color = Color.Gray
-        )
+        Text(text = label, style = MaterialTheme.typography.bodyMedium, color = Color.Gray)
         Text(
             text = value,
             style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.SemiBold),
