@@ -33,8 +33,11 @@ fun BrailleBottomSheet(
     val uiState by viewModel.uiState.collectAsState()
 
     ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+        onDismissRequest = {},
+        sheetState = rememberModalBottomSheetState(
+            skipPartiallyExpanded = true,
+            confirmValueChange = { false }
+        )
     ) {
         BrailleBottomSheetContent(
             guideMessage = uiState.guideMessage,
