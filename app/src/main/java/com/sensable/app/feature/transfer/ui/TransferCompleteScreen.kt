@@ -136,7 +136,7 @@ fun TransferCompleteScreen(
                         withStyle(style = SpanStyle(color = Color(0xFF00897B))) {
                             append(formattedAmount)
                         }
-                        append(" 보냈어요")
+                        append("을 보냈어요")
                     },
                     style = MaterialTheme.typography.headlineMedium.copy(
                         fontWeight = FontWeight.Bold,
