@@ -226,6 +226,19 @@ class BrailleViewModel @Inject constructor(
         }
 
         if (state.mode == BrailleMode.TYPO_CORRECTION) {
+            // 추천 목록 탐색 중 → 목록 닫고 오타교정 초기 상태로
+            if (state.currentSuggestionIndex >= 0) {
+                ttsManager.speak("오타 교정을 하시겠습니까? 교정을 하시려면 위로 스와이프, 하지 않으시려면 두번 터치해주세요.")
+                _uiState.update {
+                    it.copy(
+                        correctionSuggestions = emptyList(),
+                        currentSuggestionIndex = -1,
+                        autocompleteSuggestion = "",
+                    )
+                }
+                return false
+            }
+            // 추천 목록 없는 상태 → 수취인 입력화면으로
             koreanStateMachine.reset()
             ttsManager.speak("누구에게 보낼까요?")
             _uiState.update {
@@ -361,14 +374,16 @@ class BrailleViewModel @Inject constructor(
         }
     }
 
-    // 목업 오타교정 후보 3개 — 실제 서비스에서는 백엔드 API 호출로 대체
+    private val mockNamePool = listOf("김봄", "김보미", "김별", "김봄비", "김보람")
+
+    // 목업 오타교정 후보 — 입력값 제외 후 항상 3개 반환
     private fun getMockCorrectionSuggestions(input: String): List<String> {
-        return listOf("김봄", "김보미", "김별").filter { it != input }
+        return mockNamePool.filter { it != input }.take(3)
     }
 
-    // 목업 자동완성 후보 3개 (최근 이체 내역) — 실제 서비스에서는 백엔드 API 호출로 대체
+    // 목업 자동완성 후보 — 최근 이체 내역 상위 3개
     private fun getMockAutocompleteSuggestions(): List<String> {
-        return listOf("김봄", "김보미", "김별")
+        return mockNamePool.take(3)
     }
 
     fun reset() {
