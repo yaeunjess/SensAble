@@ -5,7 +5,7 @@ import android.os.Build
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
-import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
@@ -62,7 +62,8 @@ private fun vibrateTap(context: Context) {
  *   [6] [3]             [3] [6]
  */
 private class SwipeState {
-    var totalDrag = 0f
+    var totalDragX = 0f
+    var totalDragY = 0f
     var hasFired = false
 }
 
@@ -73,6 +74,7 @@ fun BrailleGrid(
     pressedDots: Set<Int> = emptySet(),
     onDoubleTap: (() -> Unit)? = null,
     onSwipeLeft: (() -> Unit)? = null,
+    onSwipeUp: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val swipe = remember { SwipeState() }
@@ -80,19 +82,21 @@ fun BrailleGrid(
     var columnModifier = modifier
         .fillMaxWidth()
         .pointerInput(Unit) {
-            detectHorizontalDragGestures(
+            detectDragGestures(
                 onDragStart = {
-                    swipe.totalDrag = 0f
+                    swipe.totalDragX = 0f
+                    swipe.totalDragY = 0f
                     swipe.hasFired = false
                 },
-                onHorizontalDrag = { _, delta ->
-                    swipe.totalDrag += delta
-                    if (swipe.totalDrag > 80f && !swipe.hasFired) {
-                        swipe.hasFired = true
-                        onSwipeRight()
-                    } else if (swipe.totalDrag < -80f && !swipe.hasFired) {
-                        swipe.hasFired = true
-                        onSwipeLeft?.invoke()
+                onDrag = { _, dragAmount ->
+                    swipe.totalDragX += dragAmount.x
+                    swipe.totalDragY += dragAmount.y
+                    if (!swipe.hasFired) {
+                        when {
+                            swipe.totalDragX > 80f  -> { swipe.hasFired = true; onSwipeRight() }
+                            swipe.totalDragX < -80f -> { swipe.hasFired = true; onSwipeLeft?.invoke() }
+                            swipe.totalDragY < -80f -> { swipe.hasFired = true; onSwipeUp?.invoke() }
+                        }
                     }
                 }
             )

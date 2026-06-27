@@ -60,6 +60,7 @@ fun BrailleBottomSheet(
             onButtonClick = { dot -> viewModel.onBrailleButtonClick(dot) },
             onSwipeRight = { viewModel.onSwipeRight() },
             onSwipeLeft = { if (viewModel.onSwipeLeft()) onDismiss() },
+            onSwipeUp = { viewModel.onSwipeUp() },
             onDoubleTap = {
                 viewModel.onDoubleTap { recipient, amount ->
                     onDismiss()
@@ -86,6 +87,7 @@ internal fun BrailleBottomSheetContent(
     onSwipeRight: () -> Unit,
     onDoubleTap: () -> Unit,
     onSwipeLeft: (() -> Unit)? = null,
+    onSwipeUp: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     Column(
@@ -165,6 +167,7 @@ internal fun BrailleBottomSheetContent(
             onButtonClick = onButtonClick,
             onSwipeRight = onSwipeRight,
             onSwipeLeft = onSwipeLeft,
+            onSwipeUp = onSwipeUp,
             pressedDots = currentCellDots,
             onDoubleTap = onDoubleTap,
             modifier = Modifier.weight(1f)
