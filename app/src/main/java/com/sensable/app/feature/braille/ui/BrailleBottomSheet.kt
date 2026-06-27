@@ -112,9 +112,8 @@ internal fun BrailleBottomSheetContent(
                     text = buildAnnotatedString {
                         withStyle(SpanStyle(color = Color(0xFF00897B))) {
                             append(recipientName)
-                            append("님")
                         }
-                        append("에게")
+                        append("님에게")
                     },
                     style = MaterialTheme.typography.titleMedium.copy(
                         fontWeight = FontWeight.SemiBold,

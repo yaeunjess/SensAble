@@ -68,6 +68,7 @@ class BrailleViewModel @Inject constructor(
         if (state.mode == BrailleMode.TRANSFER_RECIPIENT &&
             BrailleDecoder.isNumberPrefix(dots) && !state.isNumberMode
         ) {
+            ttsManager.speak("계좌번호 입력 모드입니다. 숫자를 입력해주세요.")
             _uiState.update {
                 it.copy(
                     currentCellDots = emptySet(),
@@ -113,6 +114,28 @@ class BrailleViewModel @Inject constructor(
 
         when (state.mode) {
             BrailleMode.TRANSFER_RECIPIENT -> {
+                // 계좌번호(숫자) 입력 시: 오타교정 건너뛰고 바로 금액 입력, 수취인 고정
+                if (state.isNumberMode) {
+                    val recipient = "이지영"
+                    ttsManager.speak("${recipient}님에게 얼마를 보낼까요?")
+                    _uiState.update {
+                        it.copy(
+                            mode = BrailleMode.TRANSFER_AMOUNT,
+                            guideMessage = "얼마를 보낼까요?",
+                            recipientName = recipient,
+                            inputText = "",
+                            pendingDisplay = "",
+                            currentCellDots = emptySet(),
+                            isNumberMode = true,
+                            confirmedCells = emptyList(),
+                            correctionSuggestions = emptyList(),
+                            currentSuggestionIndex = -1,
+                            autocompleteSuggestion = "",
+                        )
+                    }
+                    return
+                }
+                // 한글(이름) 입력 시: 오타교정 단계로
                 val confirmedName = if (state.currentSuggestionIndex >= 0 && state.correctionSuggestions.isNotEmpty()) {
                     state.correctionSuggestions[state.currentSuggestionIndex]
                 } else {
