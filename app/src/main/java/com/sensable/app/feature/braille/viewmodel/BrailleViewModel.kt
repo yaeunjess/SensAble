@@ -60,31 +60,7 @@ class BrailleViewModel @Inject constructor(
         val state = _uiState.value
         if (state.mode == BrailleMode.SERVICE_SELECT) return
 
-        // 오타교정 단계: 오른쪽 스와이프 = 현재 표시된 이름(후보 or 원본)으로 확정 → 금액 입력
-        if (state.mode == BrailleMode.TYPO_CORRECTION) {
-            val confirmedName = if (state.currentSuggestionIndex >= 0 && state.correctionSuggestions.isNotEmpty()) {
-                state.correctionSuggestions[state.currentSuggestionIndex]
-            } else {
-                state.recipientName
-            }
-            ttsManager.speak("${confirmedName}님에게 얼마를 보낼까요?")
-            _uiState.update {
-                it.copy(
-                    mode = BrailleMode.TRANSFER_AMOUNT,
-                    guideMessage = "얼마를 보낼까요?",
-                    recipientName = confirmedName,
-                    inputText = "",
-                    pendingDisplay = "",
-                    currentCellDots = emptySet(),
-                    isNumberMode = true,
-                    confirmedCells = emptyList(),
-                    correctionSuggestions = emptyList(),
-                    currentSuggestionIndex = -1,
-                    autocompleteSuggestion = "",
-                )
-            }
-            return
-        }
+        if (state.mode == BrailleMode.TYPO_CORRECTION) return
         val dots = state.currentCellDots
         if (dots.isEmpty()) return
 
@@ -195,7 +171,11 @@ class BrailleViewModel @Inject constructor(
 
         // 자동완성 후보 탐색 중 → 후보 목록 닫고 입력 화면으로 복귀
         if (state.mode == BrailleMode.TRANSFER_RECIPIENT && state.currentSuggestionIndex >= 0) {
+            val currentInput = state.inputText + state.pendingDisplay
             ttsManager.speak("누구에게 보낼까요?")
+            if (currentInput.isNotEmpty()) {
+                ttsManager.speakQueued("현재 '${currentInput}'가 입력되어 있습니다.")
+            }
             _uiState.update {
                 it.copy(
                     correctionSuggestions = emptyList(),
