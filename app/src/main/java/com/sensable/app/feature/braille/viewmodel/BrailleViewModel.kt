@@ -65,7 +65,13 @@ class BrailleViewModel @Inject constructor(
         if (state.mode == BrailleMode.TRANSFER_RECIPIENT &&
             BrailleDecoder.isNumberPrefix(dots) && !state.isNumberMode
         ) {
-            _uiState.update { it.copy(currentCellDots = emptySet(), isNumberMode = true) }
+            _uiState.update {
+                it.copy(
+                    currentCellDots = emptySet(),
+                    isNumberMode = true,
+                    confirmedCells = it.confirmedCells + listOf(dots),
+                )
+            }
             return
         }
 
@@ -76,25 +82,21 @@ class BrailleViewModel @Inject constructor(
         }
 
         val newPendingDisplay = if (!state.isNumberMode) koreanStateMachine.getPendingDisplay() else ""
-
-        // 지금까지 누적된 inputText 뒤에 이번에 완성된 글자(decoded)를 이어 붙여 최종 입력값 갱신
         val newText = state.inputText + decoded
 
-        // [TTS] 디코딩 결과가 있으면 읽어주고, 조합 중인 글자(pendingDisplay)가 남아 있으면 이어서 읽음
-        // 금액 모드에서는 현재까지 입력된 전체 금액을 "000원" 형태로 읽어 누적 금액을 사용자에게 알림
         if (decoded.isNotEmpty()) {
             val spoken = if (state.mode == BrailleMode.TRANSFER_AMOUNT) "${newText}원" else decoded
             ttsManager.speak(spoken)
             if (newPendingDisplay.isNotEmpty()) ttsManager.speakQueued(newPendingDisplay)
         } else if (newPendingDisplay.isNotEmpty()) {
-            // decoded는 없지만 아직 조합 중인 글자가 있는 경우 — 중간 상태를 읽어줌
             ttsManager.speak(newPendingDisplay)
         }
         _uiState.update {
             it.copy(
-                currentCellDots = emptySet(),   // 현재 셀 초기화 (다음 글자 입력 준비)
-                inputText = newText,             // 누적 입력 문자열 갱신
+                currentCellDots = emptySet(),
+                inputText = newText,
                 pendingDisplay = newPendingDisplay,
+                confirmedCells = it.confirmedCells + listOf(dots),
             )
         }
     }
@@ -103,14 +105,11 @@ class BrailleViewModel @Inject constructor(
     fun onDoubleTap(onNavigateToConfirm: (String, String) -> Unit) {
         val state = _uiState.value
 
-        // 한글 조합 중이던 마지막 글자를 강제로 확정(flush)하여 inputText에 합산
-        // — 더블탭이 확인 동작이므로, 아직 조합 버퍼에 남아 있는 글자도 함께 확정해야 함
         val flushed = if (!state.isNumberMode) koreanStateMachine.flush() else ""
         val finalText = state.inputText + flushed
 
         when (state.mode) {
             BrailleMode.TRANSFER_RECIPIENT -> {
-                // [TTS] 수취인 확정 후 금액 입력 안내 멘트 읽기
                 ttsManager.speak("${finalText}님에게 얼마를 보낼까요?")
                 _uiState.update {
                     it.copy(
@@ -121,6 +120,7 @@ class BrailleViewModel @Inject constructor(
                         pendingDisplay = "",
                         currentCellDots = emptySet(),
                         isNumberMode = true,
+                        confirmedCells = emptyList(),
                     )
                 }
             }
@@ -130,6 +130,94 @@ class BrailleViewModel @Inject constructor(
             BrailleMode.SERVICE_SELECT -> Unit
         }
     }
+
+    // true를 반환하면 호출자가 바텀시트를 닫아야 함
+    fun onSwipeLeft(): Boolean {
+        val state = _uiState.value
+        if (state.mode == BrailleMode.SERVICE_SELECT) return true
+
+        // 1. 현재 셀에 점이 선택된 상태 → 셀만 초기화
+        if (state.currentCellDots.isNotEmpty()) {
+            ttsManager.speak("취소")
+            _uiState.update { it.copy(currentCellDots = emptySet()) }
+            return false
+        }
+
+        // 2 & 3. 확정된 입력(셀)이 있으면 → 마지막 셀 하나 되돌리기
+        val cells = state.confirmedCells
+        if (cells.isNotEmpty()) {
+            val newCells = cells.dropLast(1)
+            val rebuilt = replayCells(newCells, state.mode)
+            val ttsText = rebuilt.pendingDisplay.ifEmpty {
+                rebuilt.inputText.ifEmpty { "모두 지워졌습니다" }
+            }
+            ttsManager.speak(ttsText)
+            _uiState.update {
+                it.copy(
+                    inputText = rebuilt.inputText,
+                    pendingDisplay = rebuilt.pendingDisplay,
+                    currentCellDots = emptySet(),
+                    isNumberMode = rebuilt.isNumberMode,
+                    confirmedCells = newCells,
+                )
+            }
+            return false
+        }
+
+        // 4. 모두 비어있으면 → 이전 단계로 복귀
+        when (state.mode) {
+            BrailleMode.TRANSFER_RECIPIENT -> {
+                koreanStateMachine.reset()
+                ttsManager.speak("어떤 서비스를 이용하시겠습니까?")
+                _uiState.update { BrailleUiState() }
+            }
+            BrailleMode.TRANSFER_AMOUNT -> {
+                koreanStateMachine.reset()
+                ttsManager.speak("누구에게 보낼까요?")
+                _uiState.update {
+                    it.copy(
+                        mode = BrailleMode.TRANSFER_RECIPIENT,
+                        guideMessage = "누구에게 보낼까요?",
+                        inputText = "",
+                        pendingDisplay = "",
+                        currentCellDots = emptySet(),
+                        isNumberMode = false,
+                        confirmedCells = emptyList(),
+                    )
+                }
+            }
+            BrailleMode.SERVICE_SELECT -> return true
+        }
+        return false
+    }
+
+    // 셀 목록을 처음부터 재연산해서 현재 inputText / pendingDisplay / isNumberMode를 복원
+    private fun replayCells(cells: List<Set<Int>>, mode: BrailleMode): ReplayResult {
+        koreanStateMachine.reset()
+        var inputText = ""
+        var pendingDisplay = ""
+        var isNumberMode = mode == BrailleMode.TRANSFER_AMOUNT
+
+        for (cell in cells) {
+            if (!isNumberMode && BrailleDecoder.isNumberPrefix(cell)) {
+                isNumberMode = true
+                continue
+            }
+            if (isNumberMode) {
+                inputText += BrailleDecoder.decodeNumber(cell)?.toString() ?: ""
+            } else {
+                inputText += koreanStateMachine.process(cell)
+                pendingDisplay = koreanStateMachine.getPendingDisplay()
+            }
+        }
+        return ReplayResult(inputText, pendingDisplay, isNumberMode)
+    }
+
+    private data class ReplayResult(
+        val inputText: String,
+        val pendingDisplay: String,
+        val isNumberMode: Boolean,
+    )
 
     fun reset() {
         koreanStateMachine.reset()
@@ -145,6 +233,7 @@ data class BrailleUiState(
     val inputText: String = "",
     val pendingDisplay: String = "",
     val recipientName: String = "",
+    val confirmedCells: List<Set<Int>> = emptyList(),
 )
 
 enum class BrailleMode {

@@ -72,6 +72,7 @@ fun BrailleGrid(
     onSwipeRight: () -> Unit,
     pressedDots: Set<Int> = emptySet(),
     onDoubleTap: (() -> Unit)? = null,
+    onSwipeLeft: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val swipe = remember { SwipeState() }
@@ -89,6 +90,9 @@ fun BrailleGrid(
                     if (swipe.totalDrag > 80f && !swipe.hasFired) {
                         swipe.hasFired = true
                         onSwipeRight()
+                    } else if (swipe.totalDrag < -80f && !swipe.hasFired) {
+                        swipe.hasFired = true
+                        onSwipeLeft?.invoke()
                     }
                 }
             )
