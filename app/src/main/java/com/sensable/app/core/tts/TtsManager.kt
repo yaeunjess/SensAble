@@ -21,7 +21,7 @@ class TtsManager @Inject constructor(
             if (status == TextToSpeech.SUCCESS) {
                 tts?.language = Locale.KOREAN
                 tts?.setPitch(0.85f)
-                tts?.setSpeechRate(0.88f)
+                tts?.setSpeechRate(0.9f)
                 isReady = true
                 pendingText?.let { speak(it) }
                 pendingText = null

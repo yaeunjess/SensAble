@@ -181,6 +181,7 @@ internal fun BrailleBottomSheetContent(
             onSwipeUp = onSwipeUp,
             pressedDots = currentCellDots,
             onDoubleTap = onDoubleTap,
+            isServiceSelectMode = (mode == BrailleMode.SERVICE_SELECT),
             modifier = Modifier.weight(1f)
         )
     }

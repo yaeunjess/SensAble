@@ -23,26 +23,17 @@ class BrailleViewModel @Inject constructor(
 
     init {
         ttsManager.speak("어떤 서비스를 이용하시겠습니까?")
+        ttsManager.speakQueued("원하시는 서비스를 선택하시려면 오른쪽 스와이프를 해주세요.")
     }
 
     fun onBrailleButtonClick(dot: Int) {
-        ttsManager.speak(dot.toString())
         when (_uiState.value.mode) {
-            BrailleMode.SERVICE_SELECT -> handleServiceSelect(dot)
-            BrailleMode.TRANSFER_RECIPIENT, BrailleMode.TRANSFER_AMOUNT -> toggleDot(dot)
-            BrailleMode.TYPO_CORRECTION -> Unit
-        }
-    }
-
-    private fun handleServiceSelect(dot: Int) {
-        if (dot == 1) {
-            ttsManager.speakQueued("누구에게 보낼까요?")
-            _uiState.update {
-                it.copy(
-                    mode = BrailleMode.TRANSFER_RECIPIENT,
-                    guideMessage = "누구에게 보낼까요?"
-                )
+            BrailleMode.SERVICE_SELECT -> Unit
+            BrailleMode.TRANSFER_RECIPIENT, BrailleMode.TRANSFER_AMOUNT -> {
+                ttsManager.speak(dot.toString())
+                toggleDot(dot)
             }
+            BrailleMode.TYPO_CORRECTION -> Unit
         }
     }
 
@@ -58,7 +49,16 @@ class BrailleViewModel @Inject constructor(
 
     fun onSwipeRight() {
         val state = _uiState.value
-        if (state.mode == BrailleMode.SERVICE_SELECT) return
+        if (state.mode == BrailleMode.SERVICE_SELECT) {
+            val services = listOf(4 to "송금하기", 1 to "잔액조회")
+            val currentDot = state.currentCellDots.firstOrNull()
+            val currentIdx = services.indexOfFirst { it.first == currentDot }
+            val nextIdx = (currentIdx + 1) % services.size
+            val (nextDot, nextLabel) = services[nextIdx]
+            ttsManager.speak(nextLabel)
+            _uiState.update { it.copy(currentCellDots = setOf(nextDot)) }
+            return
+        }
 
         if (state.mode == BrailleMode.TYPO_CORRECTION) return
         val dots = state.currentCellDots
@@ -113,6 +113,23 @@ class BrailleViewModel @Inject constructor(
         val finalText = state.inputText + flushed
 
         when (state.mode) {
+            BrailleMode.SERVICE_SELECT -> {
+                val activeDot = state.currentCellDots.firstOrNull()
+                when (activeDot) {
+                    4 -> {
+                        ttsManager.speak("누구에게 보낼까요?")
+                        _uiState.update {
+                            it.copy(
+                                mode = BrailleMode.TRANSFER_RECIPIENT,
+                                guideMessage = "누구에게 보낼까요?",
+                                currentCellDots = emptySet()
+                            )
+                        }
+                    }
+                    1 -> ttsManager.speak("잔액조회 기능은 준비 중입니다.")
+                    else -> Unit
+                }
+            }
             BrailleMode.TRANSFER_RECIPIENT -> {
                 // 계좌번호(숫자) 입력 시: 오타교정 건너뛰고 바로 금액 입력, 수취인 고정
                 if (state.isNumberMode) {
@@ -183,7 +200,6 @@ class BrailleViewModel @Inject constructor(
             BrailleMode.TRANSFER_AMOUNT -> {
                 onNavigateToConfirm(state.recipientName, finalText)
             }
-            BrailleMode.SERVICE_SELECT -> Unit
         }
     }
 

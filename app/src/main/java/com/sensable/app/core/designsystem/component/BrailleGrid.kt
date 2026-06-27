@@ -10,6 +10,7 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -30,6 +31,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontStyle
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -75,6 +77,7 @@ fun BrailleGrid(
     onDoubleTap: (() -> Unit)? = null,
     onSwipeLeft: (() -> Unit)? = null,
     onSwipeUp: (() -> Unit)? = null,
+    isServiceSelectMode: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     val swipe = remember { SwipeState() }
@@ -121,12 +124,20 @@ fun BrailleGrid(
             ) {
                 repeat(2) { col ->
                     val dotNumber = row + (1 - col) * 3 + 1
-                    BrailleButton(
-                        label = "$dotNumber",
-                        isPressed = dotNumber in pressedDots,
-                        onClick = { onButtonClick(dotNumber) },
-                        modifier = Modifier.weight(1f)
-                    )
+                    val showButton = !isServiceSelectMode || dotNumber in setOf(1, 4)
+                    if (showButton) {
+                        val label = if (isServiceSelectMode) {
+                            when (dotNumber) { 4 -> "송금하기"; 1 -> "잔액조회"; else -> "$dotNumber" }
+                        } else "$dotNumber"
+                        BrailleButton(
+                            label = label,
+                            isPressed = dotNumber in pressedDots,
+                            onClick = { onButtonClick(dotNumber) },
+                            modifier = Modifier.weight(1f)
+                        )
+                    } else {
+                        Box(modifier = Modifier.weight(1f).aspectRatio(1f))
+                    }
                     // 왼쪽 버튼(col=0) 다음에 넓은 중앙 공간 — 더블탭 영역
                     if (col == 0) Spacer(modifier = Modifier.weight(0.6f))
                 }
@@ -172,6 +183,14 @@ private fun BrailleButton(
             contentColor = if (active) Color.Black else Color.Gray
         )
     ) {
-        Text(text = label, fontSize = 36.sp)
+        Text(
+            text = label,
+            fontSize = when {
+                label.length == 1 -> 36.sp
+                label.length <= 2 -> 24.sp
+                else -> 16.sp
+            },
+            textAlign = TextAlign.Center
+        )
     }
 }
