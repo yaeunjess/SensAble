@@ -18,6 +18,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import com.sensable.app.ui.theme.SensableBlueContent
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -71,7 +72,7 @@ fun BrailleBottomSheet(
             modifier = Modifier
                 .fillMaxWidth()
                 .fillMaxHeight(0.95f)
-                .padding(horizontal = 24.dp, vertical = 16.dp)
+                .padding(vertical = 16.dp)
         )
     }
 }
@@ -100,6 +101,7 @@ internal fun BrailleBottomSheetContent(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
+                .padding(horizontal = 24.dp)
                 .pointerInput(Unit) {
                     detectTapGestures(onDoubleTap = { onDoubleTap() })
                 }
@@ -110,7 +112,7 @@ internal fun BrailleBottomSheetContent(
             if (mode == BrailleMode.TRANSFER_AMOUNT && recipientName.isNotEmpty()) {
                 Text(
                     text = buildAnnotatedString {
-                        withStyle(SpanStyle(color = Color(0xFF00897B))) {
+                        withStyle(SpanStyle(color = SensableBlueContent)) {
                             append(recipientName)
                         }
                         append("님에게")
@@ -137,7 +139,7 @@ internal fun BrailleBottomSheetContent(
             // 텍스트 표시 영역 — 우선순위: 자동완성/교정 후보 > 원본 입력 > recipientName(오타교정 모드)
             val displayAnnotated = when {
                 autocompleteSuggestion.isNotEmpty() -> buildAnnotatedString {
-                    withStyle(SpanStyle(color = Color(0xFF00897B), fontWeight = FontWeight.Bold)) {
+                    withStyle(SpanStyle(color = SensableBlueContent, fontWeight = FontWeight.Bold)) {
                         append(autocompleteSuggestion)
                     }
                 }

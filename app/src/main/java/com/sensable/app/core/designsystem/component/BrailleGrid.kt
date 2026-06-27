@@ -12,15 +12,15 @@ import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -30,7 +30,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -53,6 +52,12 @@ private fun vibrateTap(context: Context) {
         vibrator.vibrate(80L)
     }
 }
+
+// 왼쪽 끝에 붙는 버튼: 왼쪽 직각 + 오른쪽 20dp 라운드 — 점 4, 5, 6
+private val LeftBrailleButtonShape = RoundedCornerShape(topEnd = 20.dp, bottomEnd = 20.dp)
+
+// 오른쪽 끝에 붙는 버튼: 왼쪽 20dp 라운드 + 오른쪽 직각 — 점 1, 2, 3
+private val RightBrailleButtonShape = RoundedCornerShape(topStart = 20.dp, bottomStart = 20.dp)
 
 /**
  * 3행 2열 점자 인터페이스 그리드 — 쓰기 방향 기준.
@@ -114,7 +119,7 @@ fun BrailleGrid(
 
     Column(
         modifier = columnModifier,
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+        verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         repeat(3) { row ->
             Row(
@@ -125,6 +130,7 @@ fun BrailleGrid(
             ) {
                 repeat(2) { col ->
                     val dotNumber = row + (1 - col) * 3 + 1
+                    val isLeftSide = (col == 0)
                     val showButton = !isServiceSelectMode || dotNumber in setOf(1, 4)
                     if (showButton) {
                         val label = if (isServiceSelectMode) {
@@ -133,11 +139,12 @@ fun BrailleGrid(
                         BrailleButton(
                             label = label,
                             isPressed = dotNumber in pressedDots,
+                            isLeftSide = isLeftSide,
                             onClick = { onButtonClick(dotNumber) },
-                            modifier = Modifier.weight(1f)
+                            modifier = Modifier.weight(1.5f)
                         )
                     } else {
-                        Box(modifier = Modifier.weight(1f).aspectRatio(1f))
+                        Box(modifier = Modifier.weight(1.5f).fillMaxHeight())
                     }
                     // 왼쪽 버튼(col=0) 다음에 넓은 중앙 공간 — 더블탭 영역
                     if (col == 0) Spacer(modifier = Modifier.weight(0.6f))
@@ -154,7 +161,7 @@ private fun BrailleGridPreview() {
         BrailleGrid(
             onButtonClick = { _ -> },
             onSwipeRight = {},
-            modifier = Modifier.padding(16.dp)
+            modifier = Modifier.padding(vertical = 16.dp)
         )
     }
 }
@@ -163,6 +170,7 @@ private fun BrailleGridPreview() {
 private fun BrailleButton(
     label: String,
     isPressed: Boolean,
+    isLeftSide: Boolean,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -176,9 +184,10 @@ private fun BrailleButton(
             vibrateTap(context)
             onClick()
         },
-        shape = CircleShape,
-        modifier = modifier.aspectRatio(1f),
+        shape = if (isLeftSide) LeftBrailleButtonShape else RightBrailleButtonShape,
+        modifier = modifier.fillMaxHeight(),
         interactionSource = interactionSource,
+        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),
         colors = ButtonDefaults.buttonColors(
             containerColor = if (active) SensableBlue else Color(0xFFDDDDDD),
             contentColor = if (active) SensableBlueContent else Color.Gray
