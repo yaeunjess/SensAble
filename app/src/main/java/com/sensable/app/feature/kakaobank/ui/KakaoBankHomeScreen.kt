@@ -29,6 +29,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
 import androidx.navigation.compose.rememberNavController
 import com.sensable.app.R
+import com.sensable.app.core.common.MOCK_BALANCE
 import com.sensable.app.feature.braille.ui.BrailleBottomSheet
 import com.sensable.app.feature.kakaobank.viewmodel.KakaoBankViewModel
 import com.sensable.app.ui.theme.SensableTheme
@@ -111,7 +112,7 @@ fun KakaoBankHomeContent(
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 // BannerSection()
-                AccountCard(userName = "김예은", balance = "1원")
+                AccountCard(userName = "김예은", balance = "%,d원".format(MOCK_BALANCE))
                 ServicePromotionCard()
                 AddServiceCard()
                 FooterLinks()

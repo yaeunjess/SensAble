@@ -34,6 +34,7 @@ import androidx.fragment.app.FragmentActivity
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
 import androidx.navigation.compose.rememberNavController
+import com.sensable.app.core.common.postTransferBalance
 import com.sensable.app.core.navigation.Screen
 import com.sensable.app.feature.transfer.viewmodel.TransferConfirmViewModel
 import com.sensable.app.ui.theme.KakaoYellow
@@ -147,7 +148,7 @@ fun TransferConfirmScreen(
                     InfoRow(label = "보내는 분", value = "김예은")
                     InfoRow(label = "받는 분", value = recipient)
                     InfoRow(label = "금액", value = formattedAmount, valueColor = Color(0xFF00897B))
-                    InfoRow(label = "이체 후 잔액", value = "1,500,000원", showDivider = false)
+                    InfoRow(label = "이체 후 잔액", value = "%,d원".format(postTransferBalance(amount)), showDivider = false)
                 }
             }
         }
