@@ -58,13 +58,13 @@ fun BrailleBottomSheet(
             recipientName = uiState.recipientName,
             mode = uiState.mode,
             onButtonClick = { dot -> viewModel.onBrailleButtonClick(dot) },
-            onSwipeRight = { viewModel.onSwipeRight() },
-            onDoubleTap = {
+            onSwipeRight = {
                 viewModel.onDoubleTap { recipient, amount ->
                     onDismiss()
                     navController.navigate(Screen.TransferConfirm.createRoute(recipient, amount))
                 }
             },
+            onDoubleTap = { viewModel.onSwipeRight() },
             modifier = Modifier
                 .fillMaxWidth()
                 .fillMaxHeight(0.95f)
