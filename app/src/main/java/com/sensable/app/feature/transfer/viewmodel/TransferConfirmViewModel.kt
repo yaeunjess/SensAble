@@ -17,8 +17,8 @@ class TransferConfirmViewModel @Inject constructor(
     private val ttsManager: TtsManager
 ) : ViewModel() {
 
-    private val _autoTriggerBiometric = MutableStateFlow(false)
-    val autoTriggerBiometric: StateFlow<Boolean> = _autoTriggerBiometric.asStateFlow()
+    private val _showFingerprintSheet = MutableStateFlow(false)
+    val showFingerprintSheet: StateFlow<Boolean> = _showFingerprintSheet.asStateFlow()
 
     init {
         val recipient = URLDecoder.decode(savedStateHandle.get<String>("recipient") ?: "", "UTF-8")
@@ -26,9 +26,17 @@ class TransferConfirmViewModel @Inject constructor(
         val formattedAmount = amount.toLongOrNull()?.let { "%,d원".format(it) } ?: "${amount}원"
         val formattedPostBalance = "%,d원".format(postTransferBalance(amount))
         ttsManager.speakWithCompletion(
-            "받는 분, $recipient, 금액, $formattedAmount, 이체 후 잔액, $formattedPostBalance 입니다. 송금하시겠습니까? 송금을 원하시면 가운데에 지문인증을 해주세요."
+            "받는 분, $recipient, 금액, $formattedAmount, 이체 후 잔액, $formattedPostBalance 입니다. 송금하시겠습니까? 지문을 탭하여 인증해주세요."
         ) {
-            _autoTriggerBiometric.value = true
+            _showFingerprintSheet.value = true
         }
+    }
+
+    fun onAuthButtonClick() {
+        _showFingerprintSheet.value = true
+    }
+
+    fun onSheetDismissed() {
+        _showFingerprintSheet.value = false
     }
 }

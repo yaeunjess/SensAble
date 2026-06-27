@@ -1,6 +1,7 @@
 package com.sensable.app.feature.braille.ui
 
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -98,37 +99,32 @@ internal fun BrailleBottomSheetContent(
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         // 더블탭 감지 영역 (가이드 메시지 + 디코딩 텍스트)
+        // 높이를 고정해서 모든 단계에서 BrailleGrid 버튼 위치가 동일하게 유지됨
         Column(
             modifier = Modifier
                 .fillMaxWidth()
+                .height(140.dp)
                 .padding(horizontal = 24.dp)
                 .pointerInput(Unit) {
                     detectTapGestures(onDoubleTap = { onDoubleTap() })
-                }
-                .padding(bottom = 24.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
+                },
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
         ) {
-            // 금액 입력 단계에서 수취인 이름 표시
-            if (mode == BrailleMode.TRANSFER_AMOUNT && recipientName.isNotEmpty()) {
-                Text(
-                    text = buildAnnotatedString {
-                        withStyle(SpanStyle(color = SensableBlueContent)) {
-                            append(recipientName)
-                        }
-                        append("님에게")
-                    },
-                    style = MaterialTheme.typography.titleMedium.copy(
-                        fontWeight = FontWeight.SemiBold,
-                    ),
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(bottom = 4.dp)
-                )
+            // 금액 입력 단계: 수취인 이름 + 안내 문구를 한 줄로 합쳐서 높이 동일하게 유지
+            val guideAnnotated = if (mode == BrailleMode.TRANSFER_AMOUNT && recipientName.isNotEmpty()) {
+                buildAnnotatedString {
+                    withStyle(SpanStyle(color = SensableBlueContent, fontWeight = FontWeight.SemiBold)) {
+                        append(recipientName)
+                    }
+                    append("님에게 얼마를 보낼까요?")
+                }
+            } else {
+                buildAnnotatedString { append(guideMessage) }
             }
 
             Text(
-                text = guideMessage,
+                text = guideAnnotated,
                 style = MaterialTheme.typography.titleLarge,
                 modifier = Modifier
                     .fillMaxWidth()
