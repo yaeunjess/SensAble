@@ -2,6 +2,7 @@ package com.sensable.app.core.tts
 
 import android.content.Context
 import android.speech.tts.TextToSpeech
+import android.speech.tts.UtteranceProgressListener
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.util.Locale
 import javax.inject.Inject
@@ -34,6 +35,26 @@ class TtsManager @Inject constructor(
         } else {
             pendingText = text
         }
+    }
+
+    /** TTS 재생이 끝나면 onDone 콜백 호출 (자동 지문 인증 등 후속 동작 연결용) */
+    fun speakWithCompletion(text: String, onDone: () -> Unit) {
+        if (!isReady) {
+            pendingText = text
+            return
+        }
+        val utteranceId = "completion_${System.currentTimeMillis()}"
+        tts?.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
+            override fun onStart(utteranceId: String?) {}
+            override fun onDone(utteranceId: String?) {
+                tts?.setOnUtteranceProgressListener(null)
+                onDone()
+            }
+            override fun onError(utteranceId: String?) {
+                tts?.setOnUtteranceProgressListener(null)
+            }
+        })
+        tts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, utteranceId)
     }
 
     /** 현재 발화 중인 음성 뒤에 이어서 재생 (버튼 번호 → 안내문 순서 보장) */

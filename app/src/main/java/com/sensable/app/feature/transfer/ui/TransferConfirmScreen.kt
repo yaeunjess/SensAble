@@ -20,6 +20,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -49,6 +52,7 @@ fun TransferConfirmScreen(
 ) {
     val context = LocalContext.current
     val formattedAmount = formatAmount(amount)
+    val autoTriggerBiometric by viewModel.autoTriggerBiometric.collectAsState()
 
     val biometricPrompt = remember(context, recipient, amount) {
         BiometricPrompt(
@@ -79,6 +83,20 @@ fun TransferConfirmScreen(
             .setSubtitle("${recipient}님께 $formattedAmount 송금")
             .setNegativeButtonText("취소")
             .build()
+    }
+
+    // TTS 안내 완료 후 자동으로 지문 인증 다이얼로그 표시
+    LaunchedEffect(autoTriggerBiometric) {
+        if (!autoTriggerBiometric) return@LaunchedEffect
+        val canAuthenticate = BiometricManager.from(context).canAuthenticate(
+            BiometricManager.Authenticators.BIOMETRIC_STRONG or
+                    BiometricManager.Authenticators.BIOMETRIC_WEAK
+        )
+        if (canAuthenticate == BiometricManager.BIOMETRIC_SUCCESS) {
+            biometricPrompt.authenticate(promptInfo)
+        } else {
+            navController.navigate(Screen.TransferComplete.createRoute(recipient, amount))
+        }
     }
 
     Scaffold(
