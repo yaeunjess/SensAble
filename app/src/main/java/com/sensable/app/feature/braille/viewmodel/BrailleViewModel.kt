@@ -80,6 +80,7 @@ class BrailleViewModel @Inject constructor(
                     confirmedCells = emptyList(),
                     correctionSuggestions = emptyList(),
                     currentSuggestionIndex = -1,
+                    autocompleteSuggestion = "",
                 )
             }
             return
@@ -136,22 +137,50 @@ class BrailleViewModel @Inject constructor(
 
         when (state.mode) {
             BrailleMode.TRANSFER_RECIPIENT -> {
-                ttsManager.speak("오타 교정을 하시겠습니까? 교정을 하시려면 위로 스와이프, 하지 않으시려면 오른쪽 스와이프를 해주세요.")
+                val confirmedName = if (state.currentSuggestionIndex >= 0 && state.correctionSuggestions.isNotEmpty()) {
+                    state.correctionSuggestions[state.currentSuggestionIndex]
+                } else {
+                    finalText
+                }
+                ttsManager.speak("오타 교정을 하시겠습니까? 교정을 하시려면 위로 스와이프, 하지 않으시려면 두번 터치해주세요.")
                 _uiState.update {
                     it.copy(
                         mode = BrailleMode.TYPO_CORRECTION,
                         guideMessage = "오타 교정을 하시겠습니까?",
-                        recipientName = finalText,
+                        recipientName = confirmedName,
                         inputText = "",
                         pendingDisplay = "",
                         currentCellDots = emptySet(),
                         confirmedCells = emptyList(),
                         correctionSuggestions = emptyList(),
                         currentSuggestionIndex = -1,
+                        autocompleteSuggestion = "",
                     )
                 }
             }
-            BrailleMode.TYPO_CORRECTION -> Unit
+            BrailleMode.TYPO_CORRECTION -> {
+                val confirmedName = if (state.currentSuggestionIndex >= 0 && state.correctionSuggestions.isNotEmpty()) {
+                    state.correctionSuggestions[state.currentSuggestionIndex]
+                } else {
+                    state.recipientName
+                }
+                ttsManager.speak("${confirmedName}님에게 얼마를 보낼까요?")
+                _uiState.update {
+                    it.copy(
+                        mode = BrailleMode.TRANSFER_AMOUNT,
+                        guideMessage = "얼마를 보낼까요?",
+                        recipientName = confirmedName,
+                        inputText = "",
+                        pendingDisplay = "",
+                        currentCellDots = emptySet(),
+                        isNumberMode = true,
+                        confirmedCells = emptyList(),
+                        correctionSuggestions = emptyList(),
+                        currentSuggestionIndex = -1,
+                        autocompleteSuggestion = "",
+                    )
+                }
+            }
             BrailleMode.TRANSFER_AMOUNT -> {
                 onNavigateToConfirm(state.recipientName, finalText)
             }
@@ -163,6 +192,20 @@ class BrailleViewModel @Inject constructor(
     fun onSwipeLeft(): Boolean {
         val state = _uiState.value
         if (state.mode == BrailleMode.SERVICE_SELECT) return true
+
+        // 자동완성 후보 탐색 중 → 후보 목록 닫고 입력 화면으로 복귀
+        if (state.mode == BrailleMode.TRANSFER_RECIPIENT && state.currentSuggestionIndex >= 0) {
+            ttsManager.speak("누구에게 보낼까요?")
+            _uiState.update {
+                it.copy(
+                    correctionSuggestions = emptyList(),
+                    currentSuggestionIndex = -1,
+                    autocompleteSuggestion = "",
+                )
+            }
+            return false
+        }
+
         if (state.mode == BrailleMode.TYPO_CORRECTION) {
             koreanStateMachine.reset()
             ttsManager.speak("누구에게 보낼까요?")
@@ -177,6 +220,7 @@ class BrailleViewModel @Inject constructor(
                     confirmedCells = emptyList(),
                     correctionSuggestions = emptyList(),
                     currentSuggestionIndex = -1,
+                    autocompleteSuggestion = "",
                 )
             }
             return false
@@ -268,11 +312,15 @@ class BrailleViewModel @Inject constructor(
 
     fun onSwipeUp() {
         val state = _uiState.value
-        if (state.mode != BrailleMode.TYPO_CORRECTION) return
 
-        // 후보 목록이 없으면 목업 API에서 불러옴
-        val suggestions = state.correctionSuggestions.ifEmpty {
-            getMockCorrectionSuggestions(state.recipientName)
+        val suggestions = when (state.mode) {
+            BrailleMode.TYPO_CORRECTION -> state.correctionSuggestions.ifEmpty {
+                getMockCorrectionSuggestions(state.recipientName)
+            }
+            BrailleMode.TRANSFER_RECIPIENT -> state.correctionSuggestions.ifEmpty {
+                getMockAutocompleteSuggestions()
+            }
+            else -> return
         }
 
         if (suggestions.isEmpty()) {
@@ -284,20 +332,24 @@ class BrailleViewModel @Inject constructor(
         val suggestion = suggestions[nextIndex]
         ttsManager.speak(suggestion)
 
+        // 두 모드 모두 autocompleteSuggestion에 저장 — UI에서 같은 자리에 표시
         _uiState.update {
             it.copy(
                 correctionSuggestions = suggestions,
                 currentSuggestionIndex = nextIndex,
-                guideMessage = suggestion,
+                autocompleteSuggestion = suggestion,
             )
         }
     }
 
-    // 목업 교정 후보 — 실제 서비스에서는 백엔드 API 호출로 대체
+    // 목업 오타교정 후보 3개 — 실제 서비스에서는 백엔드 API 호출로 대체
     private fun getMockCorrectionSuggestions(input: String): List<String> {
-        return listOf(
-            "김봄", "김보", "김부", "이봄", "이보"
-        ).filter { it != input }
+        return listOf("김봄", "김보미", "김별").filter { it != input }
+    }
+
+    // 목업 자동완성 후보 3개 (최근 이체 내역) — 실제 서비스에서는 백엔드 API 호출로 대체
+    private fun getMockAutocompleteSuggestions(): List<String> {
+        return listOf("김봄", "김보미", "김별")
     }
 
     fun reset() {
@@ -317,6 +369,7 @@ data class BrailleUiState(
     val confirmedCells: List<Set<Int>> = emptyList(),
     val correctionSuggestions: List<String> = emptyList(),
     val currentSuggestionIndex: Int = -1,
+    val autocompleteSuggestion: String = "",
 )
 
 enum class BrailleMode {

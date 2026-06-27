@@ -56,6 +56,7 @@ fun BrailleBottomSheet(
             inputText = uiState.inputText,
             pendingDisplay = uiState.pendingDisplay,
             recipientName = uiState.recipientName,
+            autocompleteSuggestion = uiState.autocompleteSuggestion,
             mode = uiState.mode,
             onButtonClick = { dot -> viewModel.onBrailleButtonClick(dot) },
             onSwipeRight = { viewModel.onSwipeRight() },
@@ -86,6 +87,7 @@ internal fun BrailleBottomSheetContent(
     onButtonClick: (dot: Int) -> Unit,
     onSwipeRight: () -> Unit,
     onDoubleTap: () -> Unit,
+    autocompleteSuggestion: String = "",
     onSwipeLeft: (() -> Unit)? = null,
     onSwipeUp: (() -> Unit)? = null,
     modifier: Modifier = Modifier
@@ -133,15 +135,17 @@ internal fun BrailleBottomSheetContent(
                 textAlign = TextAlign.Center
             )
 
-            val hasInput = inputText.isNotEmpty() || pendingDisplay.isNotEmpty()
-            if (hasInput) {
-                // 금액 모드에서는 입력 중에도 천 단위 + '원' 포맷 적용
-                val displayInput = if (mode == BrailleMode.TRANSFER_AMOUNT && inputText.isNotEmpty()) {
-                    "%,d원".format(inputText.toLongOrNull() ?: 0L)
-                } else {
-                    inputText
+            // 텍스트 표시 영역 — 우선순위: 자동완성/교정 후보 > 원본 입력 > recipientName(오타교정 모드)
+            val displayAnnotated = when {
+                autocompleteSuggestion.isNotEmpty() -> buildAnnotatedString {
+                    withStyle(SpanStyle(color = Color(0xFF00897B), fontWeight = FontWeight.Bold)) {
+                        append(autocompleteSuggestion)
+                    }
                 }
-                val displayText = buildAnnotatedString {
+                inputText.isNotEmpty() || pendingDisplay.isNotEmpty() -> buildAnnotatedString {
+                    val displayInput = if (mode == BrailleMode.TRANSFER_AMOUNT && inputText.isNotEmpty()) {
+                        "%,d원".format(inputText.toLongOrNull() ?: 0L)
+                    } else inputText
                     withStyle(SpanStyle(color = Color.Black, fontWeight = FontWeight.Bold)) {
                         append(displayInput)
                     }
@@ -152,8 +156,16 @@ internal fun BrailleBottomSheetContent(
                         }
                     }
                 }
+                mode == BrailleMode.TYPO_CORRECTION && recipientName.isNotEmpty() -> buildAnnotatedString {
+                    withStyle(SpanStyle(color = Color.Black, fontWeight = FontWeight.Bold)) {
+                        append(recipientName)
+                    }
+                }
+                else -> null
+            }
+            if (displayAnnotated != null) {
                 Text(
-                    text = displayText,
+                    text = displayAnnotated,
                     style = MaterialTheme.typography.headlineSmall,
                     textAlign = TextAlign.Center,
                     modifier = Modifier.fillMaxWidth()
