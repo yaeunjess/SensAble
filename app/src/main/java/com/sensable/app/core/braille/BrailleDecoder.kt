@@ -45,11 +45,6 @@ object BrailleDecoder {
      *   현재는 기본 매핑을 ㅅ으로 두지만, 된소리(ㄲ, ㄸ, ㅃ, ㅆ, ㅉ)는 된소리표 셀 + 기본 자음 셀의
      *   2-셀 조합이라 State Machine에 된소리 prefix 상태를 별도로 추가해야 처리 가능.
      *
-     * [참고] ㄴ/ㄷ/ㅁ/ㅂ/ㅈ/ㅋ/ㅌ/ㅍ/ㅎ — 약자 테이블과 점형 공유
-     *   decodeKoreanCell()은 약자를 먼저 조회하지만, State Machine은 initialConsonantTable을
-     *   직접 조회하므로 초성으로 올바르게 처리됨. 약자 지원이 필요하면 State Machine에
-     *   별도 약자 감지 상태 추가 필요.
-     *
      * [참고] ㅇ — 초성 점자 없음 (의도적 생략)
      *   모음 셀이 초성 없이 오면 State Machine이 ㅇ 초성으로 자동 처리함.
      */
@@ -95,16 +90,20 @@ object BrailleDecoder {
         setOf(3, 4, 6) to "ㅛ",
         setOf(1, 3, 4) to "ㅜ",
         setOf(1, 4, 6) to "ㅠ",
-        setOf(2, 4) to "ㅡ",        // [해결됨] 초성 ㄷ {2,4}와 점형 충돌 → State Machine으로 해결
+        setOf(2, 4, 6) to "ㅡ",
         setOf(1, 3, 5) to "ㅣ",
         setOf(1, 2, 3, 5) to "ㅐ",
         setOf(1, 3, 4, 5) to "ㅔ",
-        setOf(2, 4, 5) to "ㅚ",     // [해결됨] 초성 ㅎ {2,4,5}와 점형 충돌 → State Machine으로 해결
-        setOf(1, 2, 3, 6) to "ㅘ",  // [확인 필요] 2셀 복합일 수 있음
-        setOf(1, 2, 3, 4) to "ㅝ",  // [확인 필요] 2셀 복합일 수 있음
-        setOf(1, 3, 4, 6) to "ㅟ",  // [확인 필요] 2셀 복합일 수 있음
-        setOf(2, 4, 5, 6) to "ㅢ"   // [확인 필요] 2셀 복합일 수 있음
-        // [미해결] ㅒ, ㅙ, ㅞ — 2셀 복합 모음, State Machine에 sub-state 추가 전까지 입력 불가
+        setOf(1, 3, 4, 5, 6) to "ㅚ",
+        setOf(1, 2, 3, 6) to "ㅘ",
+        setOf(1, 2, 3, 4) to "ㅟ",
+        setOf(2, 4, 5, 6) to "ㅢ",
+        setOf(3, 4) to "ㅖ",
+        // [미해결] ㅟ, ㅒ, ㅙ, ㅞ 2셀 복합 모음, State Machine에 sub-state 추가 전까지 입력 불가
+        // ㅟ : setOf(1,3,4) + setOf(1,2,3,5)
+        // ㅒ : setOf(3,4,5) + setOf(1,2,3,5)
+        // ㅙ : setOf(1,2,3,6) + setOf(1,2,3,5)
+        // ㅞ : setOf(1,2,3,4) + setOf(1,2,3,5)
     )
 
     /**
@@ -128,71 +127,14 @@ object BrailleDecoder {
         setOf(2, 3, 5, 6) to "ㅇ",
         setOf(1, 3) to "ㅈ",
         setOf(2, 3) to "ㅊ",
-        setOf(1, 2, 3) to "ㅋ",
-        setOf(1, 3, 6) to "ㅌ",
-        setOf(1, 2, 3, 6) to "ㅍ",
+        setOf(2, 3, 5) to "ㅋ",
+        setOf(2, 3, 6) to "ㅌ",
+        setOf(2, 4, 6) to "ㅍ",
         setOf(3, 5, 6) to "ㅎ"
         // [미해결] 겹받침 미포함 — 점형 확인 후 이 테이블에 추가하면 State Machine 수정 없이 동작
-    )
-
-    /**
-     * 한글 약자 디코딩 테이블 (표준 점자 기준).
-     * 수취인 이름 입력 등 명사에 사용될 수 있는 약자(가~하, 억~을)만 포함.
-     *
-     * [미해결] 현재 KoreanBrailleStateMachine에서 이 테이블을 사용하지 않음
-     *   State Machine은 initialConsonantTable / vowelTable / finalConsonantTable만 직접 조회함.
-     *   약자 지원을 추가하려면 State Machine에 "앞뒤 셀이 자음/모음이 아닌 독립 셀"을 감지하는
-     *   별도 상태(EXPECT_ABBREVIATION_OR_INITIAL 등)와 lookahead 로직이 필요.
-     *
-     * [미해결] 나/다/마/바/자/카/타/파/하 — 초성 테이블과 점형 동일
-     *   문맥(독립 셀인지 음절의 초성인지)으로만 구분 가능. 현재 State Machine 미지원.
-     *
-     * [미해결] 약자 간 점형 충돌
-     *   '운' / '영' 둘 다 {1,2,4,5,6}으로 겹침, '옹' / '인' 둘 다 {1,2,3,4,5,6}으로 겹침.
-     *   Map key 중복이라 하나만 적용됨. 완전한 지원을 위해서는 규칙 기반 분기 필요.
-     */
-    val abbreviationTable: Map<Set<Int>, String> = mapOf(
-        setOf(1, 2, 4, 6) to "가",   // 유일하게 초성 테이블과 다른 독립 점형
-        // 아래는 초성 점형과 동일 → State Machine에서 초성으로 해석되므로 약자로 동작 안 함
-        setOf(1, 4) to "나",
-        setOf(2, 4) to "다",
-        setOf(1, 5) to "마",
-        setOf(4, 5) to "바",
-        setOf(1, 2, 3) to "사",
-        setOf(4, 6) to "자",
-        setOf(1, 2, 4) to "카",
-        setOf(1, 2, 5) to "타",
-        setOf(1, 4, 5) to "파",
-        setOf(2, 4, 5) to "하",
-
-        setOf(1, 4, 5, 6) to "억",
-        setOf(2, 3, 4, 5, 6) to "언",
-        setOf(2, 3, 4, 5) to "얼",
-        setOf(1, 6) to "연",
-        setOf(1, 2, 5, 6) to "열",
-        setOf(1, 2, 4, 5, 6) to "영", // [미해결] '운'과 점형 충돌 {1,2,4,5,6}
-        setOf(1, 3, 4, 5, 6) to "옥",
-        setOf(1, 2, 3, 5, 6) to "온",
-        setOf(1, 2, 3, 4, 5, 6) to "옹", // [미해결] '인'과 점형 충돌 {1,2,3,4,5,6}
-        setOf(1, 2, 3, 4, 6) to "울",
-        setOf(1, 3, 5, 6) to "은",
-        setOf(2, 3, 4, 6) to "을"
     )
 
     fun isNumberPrefix(dots: Set<Int>): Boolean = dots == NUMBER_PREFIX
 
     fun decodeNumber(dots: Set<Int>): Char? = numberTable[dots]
-
-    /**
-     * 단일 셀을 한글 자모 또는 약자로 디코딩. 우선순위: 약자 → 초성 → 중성.
-     *
-     * [참고] KoreanBrailleStateMachine 도입 후 BrailleViewModel에서 직접 호출되지 않음.
-     *   State Machine이 각 테이블을 상태에 맞게 직접 조회하므로 이 함수는 사실상 미사용.
-     *   약자를 포함한 단순 1-셀 조회가 필요한 경우(디버깅, 테스트 등)를 위해 유지.
-     */
-    fun decodeKoreanCell(dots: Set<Int>): String? {
-        return abbreviationTable[dots]
-            ?: initialConsonantTable[dots]
-            ?: vowelTable[dots]
-    }
 }
