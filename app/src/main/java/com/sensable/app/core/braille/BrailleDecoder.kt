@@ -73,13 +73,9 @@ object BrailleDecoder {
      * [해결됨] ㅚ {2,4,5} — 초성 ㅎ {2,4,5}와 점형 충돌
      *   → 마찬가지로 State Machine이 상태에 따라 테이블을 분리 조회하므로 해결.
      *
-     * [미해결] ㅒ, ㅙ, ㅞ 누락
-     *   표준 한국 점자에서 이 세 모음은 2셀 복합으로 표현됨 (ㅒ = ㅑ 셀 + 별도 셀 등).
-     *   단순 Map 조회로는 처리 불가. State Machine에 복합 모음 sub-state 추가 필요.
-     *
-     * [확인 필요] ㅘ, ㅝ, ㅟ, ㅢ
-     *   현재 단일 셀로 매핑되어 있으나, 표준 규정에 따라 일부가 2셀 복합일 수 있음.
-     *   국립국어원 한국 점자 규정 원문으로 재확인 권장.
+     * [해결됨] ㅟ/ㅒ/ㅙ/ㅞ — 2셀 복합 모음
+     *   이 테이블에는 없고 KoreanBrailleStateMachine의 COMPOUND_VOWEL_RESULT로 처리됨.
+     *   모두 (첫 번째 셀) + ㅐ{1,2,3,5} 조합: ㅜ→ㅟ, ㅑ→ㅒ, ㅘ→ㅙ, ㅝ→ㅞ.
      */
     val vowelTable: Map<Set<Int>, String> = mapOf(
         setOf(1, 2, 6) to "ㅏ",
@@ -96,14 +92,10 @@ object BrailleDecoder {
         setOf(1, 3, 4, 5) to "ㅔ",
         setOf(1, 3, 4, 5, 6) to "ㅚ",
         setOf(1, 2, 3, 6) to "ㅘ",
-        setOf(1, 2, 3, 4) to "ㅟ",
+        setOf(1, 2, 3, 4) to "ㅝ",
         setOf(2, 4, 5, 6) to "ㅢ",
         setOf(3, 4) to "ㅖ",
-        // [미해결] ㅟ, ㅒ, ㅙ, ㅞ 2셀 복합 모음, State Machine에 sub-state 추가 전까지 입력 불가
-        // ㅟ : setOf(1,3,4) + setOf(1,2,3,5)
-        // ㅒ : setOf(3,4,5) + setOf(1,2,3,5)
-        // ㅙ : setOf(1,2,3,6) + setOf(1,2,3,5)
-        // ㅞ : setOf(1,2,3,4) + setOf(1,2,3,5)
+        // 2셀 복합 모음(ㅟ/ㅒ/ㅙ/ㅞ)은 KoreanBrailleStateMachine.COMPOUND_VOWEL_RESULT로 처리
     )
 
     /**

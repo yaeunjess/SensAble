@@ -5,12 +5,18 @@ package com.sensable.app.core.braille
  *
  * 상태 전이:
  *   EXPECT_INITIAL → (초성 셀) → EXPECT_VOWEL
- *   EXPECT_INITIAL → (모음 셀) → ㅇ 초성으로 처리 → EXPECT_FINAL_OR_NEXT_INITIAL
- *   EXPECT_VOWEL   → (중성 셀) → EXPECT_FINAL_OR_NEXT_INITIAL
+ *   EXPECT_INITIAL → (단순 모음 셀) → ㅇ 초성으로 처리 → EXPECT_FINAL_OR_NEXT_INITIAL
+ *   EXPECT_INITIAL → (복합 모음 첫 셀) → ㅇ 초성으로 처리 → EXPECT_COMPOUND_VOWEL_CONTINUATION
+ *   EXPECT_VOWEL   → (단순 모음 셀) → EXPECT_FINAL_OR_NEXT_INITIAL
+ *   EXPECT_VOWEL   → (복합 모음 첫 셀) → EXPECT_COMPOUND_VOWEL_CONTINUATION
+ *   EXPECT_COMPOUND_VOWEL_CONTINUATION → (ㅐ 셀) → 복합 모음 확정 → EXPECT_FINAL_OR_NEXT_INITIAL
+ *   EXPECT_COMPOUND_VOWEL_CONTINUATION → (그 외) → 첫 셀을 단독 모음으로 확정 후 현재 셀 재처리
  *   EXPECT_FINAL_OR_NEXT_INITIAL → (종성 셀) → 음절 완성 → EXPECT_INITIAL
  *   EXPECT_FINAL_OR_NEXT_INITIAL → (초성 셀) → 이전 음절 완성 후 새 초성 → EXPECT_VOWEL
- *   EXPECT_FINAL_OR_NEXT_INITIAL → (모음 셀) → 이전 음절 완성 후 ㅇ 초성 → EXPECT_FINAL_OR_NEXT_INITIAL
+ *   EXPECT_FINAL_OR_NEXT_INITIAL → (단순 모음 셀) → 이전 음절 완성 후 ㅇ 초성 → EXPECT_FINAL_OR_NEXT_INITIAL
+ *   EXPECT_FINAL_OR_NEXT_INITIAL → (복합 모음 첫 셀) → 이전 음절 완성 후 ㅇ 초성 → EXPECT_COMPOUND_VOWEL_CONTINUATION
  *
+ * 복합 모음(ㅟ/ㅒ/ㅙ/ㅞ)은 모두 첫 번째 셀 + ㅐ{1,2,3,5} 두 번째 셀의 조합으로 입력.
  * process()는 음절이 완성될 때만 문자를 반환하며, 미완성이면 빈 문자열 반환.
  * 입력 필드 제출 시 flush()를 호출해 마지막 미완성 음절을 강제 완성해야 함.
  */
@@ -19,12 +25,14 @@ class KoreanBrailleStateMachine {
     private enum class State {
         EXPECT_INITIAL,
         EXPECT_VOWEL,
+        EXPECT_COMPOUND_VOWEL_CONTINUATION,
         EXPECT_FINAL_OR_NEXT_INITIAL,
     }
 
     private var state = State.EXPECT_INITIAL
     private var pendingInitial: Int? = null
     private var pendingVowel: Int? = null
+    private var pendingFirstVowelDots: Set<Int>? = null
     private val output = StringBuilder()
 
     fun process(dots: Set<Int>): String {
@@ -32,6 +40,7 @@ class KoreanBrailleStateMachine {
         when (state) {
             State.EXPECT_INITIAL -> handleExpectInitial(dots)
             State.EXPECT_VOWEL -> handleExpectVowel(dots)
+            State.EXPECT_COMPOUND_VOWEL_CONTINUATION -> handleExpectCompoundVowelContinuation(dots)
             State.EXPECT_FINAL_OR_NEXT_INITIAL -> handleExpectFinalOrNext(dots)
         }
         return output.toString()
@@ -39,6 +48,9 @@ class KoreanBrailleStateMachine {
 
     fun flush(): String {
         output.clear()
+        if (state == State.EXPECT_COMPOUND_VOWEL_CONTINUATION) {
+            commitPendingFirstVowelAsStandalone()
+        }
         assemblePendingSyllable(finalIndex = 0)
         val result = output.toString()
         reset()
@@ -49,6 +61,7 @@ class KoreanBrailleStateMachine {
         state = State.EXPECT_INITIAL
         pendingInitial = null
         pendingVowel = null
+        pendingFirstVowelDots = null
         output.clear()
     }
 
@@ -70,7 +83,12 @@ class KoreanBrailleStateMachine {
             state = State.EXPECT_VOWEL
             return
         }
-        // 초성 없이 모음이 오면 ㅇ 초성으로 처리
+        if (dots in COMPOUND_FIRST_CELLS) {
+            pendingInitial = INITIAL_INDEX["ㅇ"]
+            pendingFirstVowelDots = dots
+            state = State.EXPECT_COMPOUND_VOWEL_CONTINUATION
+            return
+        }
         val vowel = BrailleDecoder.vowelTable[dots]
         if (vowel != null) {
             pendingInitial = INITIAL_INDEX["ㅇ"]
@@ -80,11 +98,41 @@ class KoreanBrailleStateMachine {
     }
 
     private fun handleExpectVowel(dots: Set<Int>) {
+        if (dots in COMPOUND_FIRST_CELLS) {
+            pendingFirstVowelDots = dots
+            state = State.EXPECT_COMPOUND_VOWEL_CONTINUATION
+            return
+        }
         val vowel = BrailleDecoder.vowelTable[dots]
         if (vowel != null) {
             pendingVowel = VOWEL_INDEX[vowel]
             state = State.EXPECT_FINAL_OR_NEXT_INITIAL
         }
+    }
+
+    private fun handleExpectCompoundVowelContinuation(dots: Set<Int>) {
+        if (dots == COMPOUND_SECOND_CELL) {
+            val compound = COMPOUND_VOWEL_RESULT[pendingFirstVowelDots]
+            if (compound != null) {
+                pendingVowel = VOWEL_INDEX[compound]
+                pendingFirstVowelDots = null
+                state = State.EXPECT_FINAL_OR_NEXT_INITIAL
+            }
+            return
+        }
+        // 두 번째 셀이 ㅐ가 아니면 첫 셀을 단독 모음으로 확정하고 현재 셀 재처리
+        commitPendingFirstVowelAsStandalone()
+        handleExpectFinalOrNext(dots)
+    }
+
+    private fun commitPendingFirstVowelAsStandalone() {
+        val firstDots = pendingFirstVowelDots ?: return
+        val vowel = BrailleDecoder.vowelTable[firstDots]
+        if (vowel != null) {
+            pendingVowel = VOWEL_INDEX[vowel]
+        }
+        pendingFirstVowelDots = null
+        state = State.EXPECT_FINAL_OR_NEXT_INITIAL
     }
 
     private fun handleExpectFinalOrNext(dots: Set<Int>) {
@@ -103,7 +151,15 @@ class KoreanBrailleStateMachine {
             state = State.EXPECT_VOWEL
             return
         }
-        // 다음 음절이 ㅇ 초성 + 모음
+        // 다음 음절이 ㅇ 초성 + 복합 모음
+        if (dots in COMPOUND_FIRST_CELLS) {
+            assemblePendingSyllable(finalIndex = 0)
+            pendingInitial = INITIAL_INDEX["ㅇ"]
+            pendingFirstVowelDots = dots
+            state = State.EXPECT_COMPOUND_VOWEL_CONTINUATION
+            return
+        }
+        // 다음 음절이 ㅇ 초성 + 단순 모음
         val vowel = BrailleDecoder.vowelTable[dots]
         if (vowel != null) {
             assemblePendingSyllable(finalIndex = 0)
@@ -124,6 +180,25 @@ class KoreanBrailleStateMachine {
     companion object {
         // 유니코드 한글 음절 = 0xAC00 + 초성 * 21 * 28 + 중성 * 28 + 종성
 
+        // 복합 모음 첫 번째 셀 집합 (ㅜ/ㅑ/ㅘ/ㅝ) — 다음 셀이 ㅐ이면 복합 모음으로 확정
+        private val COMPOUND_FIRST_CELLS: Set<Set<Int>> = setOf(
+            setOf(1, 3, 4),    // ㅜ → ㅟ
+            setOf(3, 4, 5),    // ㅑ → ㅒ
+            setOf(1, 2, 3, 6), // ㅘ → ㅙ
+            setOf(1, 2, 3, 4), // ㅝ → ㅞ
+        )
+
+        // 복합 모음 두 번째 셀: ㅐ {1,2,3,5}
+        private val COMPOUND_SECOND_CELL: Set<Int> = setOf(1, 2, 3, 5)
+
+        // 첫 번째 셀 → 완성된 복합 모음 문자
+        private val COMPOUND_VOWEL_RESULT: Map<Set<Int>, String> = mapOf(
+            setOf(1, 3, 4) to "ㅟ",
+            setOf(3, 4, 5) to "ㅒ",
+            setOf(1, 2, 3, 6) to "ㅙ",
+            setOf(1, 2, 3, 4) to "ㅞ",
+        )
+
         // 초성 인덱스 → 자모 문자 (getPendingDisplay용)
         private val INITIAL_CONSONANTS = arrayOf(
             "ㄱ", "ㄲ", "ㄴ", "ㄷ", "ㄸ", "ㄹ", "ㅁ", "ㅂ", "ㅃ",
@@ -138,9 +213,10 @@ class KoreanBrailleStateMachine {
         )
 
         private val VOWEL_INDEX = mapOf(
-            "ㅏ" to 0,  "ㅐ" to 1,  "ㅑ" to 2,  "ㅓ" to 4,
-            "ㅔ" to 5,  "ㅕ" to 6,  "ㅗ" to 8,  "ㅘ" to 9,
-            "ㅚ" to 11, "ㅛ" to 12, "ㅜ" to 13, "ㅝ" to 14,
+            "ㅏ" to 0,  "ㅐ" to 1,  "ㅑ" to 2,  "ㅒ" to 3,
+            "ㅓ" to 4,  "ㅔ" to 5,  "ㅕ" to 6,  "ㅖ" to 7,
+            "ㅗ" to 8,  "ㅘ" to 9,  "ㅙ" to 10, "ㅚ" to 11,
+            "ㅛ" to 12, "ㅜ" to 13, "ㅝ" to 14, "ㅞ" to 15,
             "ㅟ" to 16, "ㅠ" to 17, "ㅡ" to 18, "ㅢ" to 19,
             "ㅣ" to 20,
         )
