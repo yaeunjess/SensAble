@@ -69,6 +69,12 @@ dependencies {
     // Splash Screen
     implementation(libs.androidx.core.splashscreen)
 
+    // AppCompat (BiometricPrompt requires FragmentActivity)
+    implementation(libs.androidx.appcompat)
+
+    // Biometric
+    implementation(libs.androidx.biometric)
+
 
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)

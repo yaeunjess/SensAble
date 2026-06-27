@@ -20,6 +20,10 @@ lifecycleViewmodelCompose = "2.8.7"
 coroutines = "1.9.0"
 # Splash Screen
 coreSplashscreen = "1.0.1"
+# AppCompat (BiometricPrompt requires FragmentActivity)
+appcompat = "1.7.0"
+# Biometric
+biometric = "1.1.0"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -49,6 +53,10 @@ lifecycle-viewmodel-compose = { group = "androidx.lifecycle", name = "lifecycle-
 kotlinx-coroutines-android = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-android", version.ref = "coroutines" }
 # Splash Screen
 androidx-core-splashscreen = { group = "androidx.core", name = "core-splashscreen", version.ref = "coreSplashscreen" }
+# AppCompat
+androidx-appcompat = { group = "androidx.appcompat", name = "appcompat", version.ref = "appcompat" }
+# Biometric
+androidx-biometric = { group = "androidx.biometric", name = "biometric", version.ref = "biometric" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

@@ -1,5 +1,7 @@
 package com.sensable.app.feature.transfer.ui
 
+import androidx.biometric.BiometricManager
+import androidx.biometric.BiometricPrompt
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -18,13 +20,17 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
+import androidx.fragment.app.FragmentActivity
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
 import androidx.navigation.compose.rememberNavController
@@ -40,14 +46,55 @@ fun TransferConfirmScreen(
     amount: String = "50000",
     viewModel: TransferConfirmViewModel = hiltViewModel()
 ) {
+    val context = LocalContext.current
     val formattedAmount = formatAmount(amount)
+
+    val biometricPrompt = remember(context, recipient, amount) {
+        BiometricPrompt(
+            context as FragmentActivity,
+            ContextCompat.getMainExecutor(context),
+            object : BiometricPrompt.AuthenticationCallback() {
+                override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
+                    navController.navigate(Screen.TransferComplete.createRoute(recipient, amount))
+                }
+                override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
+                    // 지문 센서 없음·미등록 등 하드웨어 문제 → 목업이므로 그냥 통과
+                    if (errorCode != BiometricPrompt.ERROR_USER_CANCELED &&
+                        errorCode != BiometricPrompt.ERROR_NEGATIVE_BUTTON
+                    ) {
+                        navController.navigate(Screen.TransferComplete.createRoute(recipient, amount))
+                    }
+                }
+                override fun onAuthenticationFailed() {
+                    // 지문 불일치 — 시스템이 재시도 안내하므로 별도 처리 불필요
+                }
+            }
+        )
+    }
+
+    val promptInfo = remember(recipient, formattedAmount) {
+        BiometricPrompt.PromptInfo.Builder()
+            .setTitle("지문 인증")
+            .setSubtitle("${recipient}님께 $formattedAmount 송금")
+            .setNegativeButtonText("취소")
+            .build()
+    }
 
     Scaffold(
         containerColor = Color.White,
         bottomBar = {
             Button(
                 onClick = {
-                    navController.navigate(Screen.TransferComplete.createRoute(recipient, amount))
+                    val canAuthenticate = BiometricManager.from(context).canAuthenticate(
+                        BiometricManager.Authenticators.BIOMETRIC_STRONG or
+                                BiometricManager.Authenticators.BIOMETRIC_WEAK
+                    )
+                    if (canAuthenticate == BiometricManager.BIOMETRIC_SUCCESS) {
+                        biometricPrompt.authenticate(promptInfo)
+                    } else {
+                        // 지문 사용 불가 기기 → 목업이므로 그냥 다음 화면으로
+                        navController.navigate(Screen.TransferComplete.createRoute(recipient, amount))
+                    }
                 },
                 modifier = Modifier
                     .fillMaxWidth()
