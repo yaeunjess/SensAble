@@ -53,11 +53,11 @@ private fun vibrateTap(context: Context) {
     }
 }
 
-// 왼쪽 끝에 붙는 버튼: 왼쪽 직각 + 오른쪽 20dp 라운드 — 점 4, 5, 6
-private val LeftBrailleButtonShape = RoundedCornerShape(topEnd = 20.dp, bottomEnd = 20.dp)
+// 왼쪽 끝에 붙는 버튼: 왼쪽 직각 + 오른쪽 36dp 라운드 — 점 4, 5, 6
+private val LeftBrailleButtonShape = RoundedCornerShape(topEnd = 36.dp, bottomEnd = 36.dp)
 
-// 오른쪽 끝에 붙는 버튼: 왼쪽 20dp 라운드 + 오른쪽 직각 — 점 1, 2, 3
-private val RightBrailleButtonShape = RoundedCornerShape(topStart = 20.dp, bottomStart = 20.dp)
+// 오른쪽 끝에 붙는 버튼: 왼쪽 36dp 라운드 + 오른쪽 직각 — 점 1, 2, 3
+private val RightBrailleButtonShape = RoundedCornerShape(topStart = 36.dp, bottomStart = 36.dp)
 
 /**
  * 3행 2열 점자 인터페이스 그리드 — 쓰기 방향 기준.
@@ -147,7 +147,7 @@ fun BrailleGrid(
                         Box(modifier = Modifier.weight(1.5f).fillMaxHeight())
                     }
                     // 왼쪽 버튼(col=0) 다음에 넓은 중앙 공간 — 더블탭 영역
-                    if (col == 0) Spacer(modifier = Modifier.weight(0.6f))
+                    if (col == 0) Spacer(modifier = Modifier.weight(1.0f))
                 }
             }
         }
