@@ -22,8 +22,8 @@ class BrailleViewModel @Inject constructor(
     private val koreanStateMachine = KoreanBrailleStateMachine()
 
     init {
-        ttsManager.speak("어떤 서비스를 이용하시겠습니까?")
-        ttsManager.speakQueued("원하시는 서비스를 선택하시려면 오른쪽 스와이프를 해주세요.")
+        ttsManager.speak("어떤 서비스를 이용하시겠어요?")
+        ttsManager.speakQueued("오른쪽으로 밀어 서비스를 선택하세요.")
     }
 
     fun onBrailleButtonClick(dot: Int) {
@@ -68,7 +68,7 @@ class BrailleViewModel @Inject constructor(
         if (state.mode == BrailleMode.TRANSFER_RECIPIENT &&
             BrailleDecoder.isNumberPrefix(dots) && !state.isNumberMode
         ) {
-            ttsManager.speak("계좌번호 입력 모드입니다. 숫자를 입력해주세요.")
+            ttsManager.speak("계좌번호 모드로 전환됐어요. 숫자를 입력해 주세요.")
             _uiState.update {
                 it.copy(
                     currentCellDots = emptySet(),
@@ -95,6 +95,15 @@ class BrailleViewModel @Inject constructor(
         } else if (newPendingDisplay.isNotEmpty()) {
             ttsManager.speak(newPendingDisplay)
         }
+
+        // 수취인 첫 입력 시 자동완성 안내
+        if (state.mode == BrailleMode.TRANSFER_RECIPIENT &&
+            state.inputText.isEmpty() && state.pendingDisplay.isEmpty() &&
+            (newText.isNotEmpty() || newPendingDisplay.isNotEmpty())
+        ) {
+            ttsManager.speakQueued("위로 스와이프하면 이름을 자동완성해 드려요.")
+        }
+
         _uiState.update {
             it.copy(
                 currentCellDots = emptySet(),
@@ -158,7 +167,7 @@ class BrailleViewModel @Inject constructor(
                 } else {
                     finalText
                 }
-                ttsManager.speak("오타 교정을 하시겠습니까? 교정을 하시려면 위로 스와이프, 하지 않으시려면 두번 터치해주세요.")
+                ttsManager.speak("오타 교정을 원하시면 위로 밀어 주세요. 건너뛰려면 두 번 탭하세요.")
                 _uiState.update {
                     it.copy(
                         mode = BrailleMode.TYPO_CORRECTION,
@@ -228,7 +237,7 @@ class BrailleViewModel @Inject constructor(
         if (state.mode == BrailleMode.TYPO_CORRECTION) {
             // 추천 목록 탐색 중 → 목록 닫고 오타교정 초기 상태로
             if (state.currentSuggestionIndex >= 0) {
-                ttsManager.speak("오타 교정을 하시겠습니까? 교정을 하시려면 위로 스와이프, 하지 않으시려면 두번 터치해주세요.")
+                ttsManager.speak("오타 교정을 원하시면 위로 밀어 주세요. 건너뛰려면 두 번 탭하세요.")
                 _uiState.update {
                     it.copy(
                         correctionSuggestions = emptyList(),
@@ -290,7 +299,7 @@ class BrailleViewModel @Inject constructor(
         when (state.mode) {
             BrailleMode.TRANSFER_RECIPIENT -> {
                 koreanStateMachine.reset()
-                ttsManager.speak("어떤 서비스를 이용하시겠습니까?")
+                ttsManager.speak("어떤 서비스를 이용하시겠어요?")
                 _uiState.update { BrailleUiState() }
             }
             BrailleMode.TRANSFER_AMOUNT -> {
@@ -356,7 +365,7 @@ class BrailleViewModel @Inject constructor(
         }
 
         if (suggestions.isEmpty()) {
-            ttsManager.speak("추천 결과가 없습니다.")
+            ttsManager.speak("일치하는 이름을 찾지 못했어요.")
             return
         }
 
