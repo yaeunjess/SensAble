@@ -41,9 +41,9 @@ object BrailleDecoder {
      * [해결됨] ㅎ {2,4,5} — 중성 ㅚ {2,4,5}와 점형 충돌
      *   → 마찬가지로 State Machine이 상태(초성/중성)에 따라 테이블을 분리 조회하므로 해결.
      *
-     * [미해결] ㅅ {6} — 된소리표와 점형 동일
-     *   현재는 기본 매핑을 ㅅ으로 두지만, 된소리(ㄲ, ㄸ, ㅃ, ㅆ, ㅉ)는 된소리표 셀 + 기본 자음 셀의
-     *   2-셀 조합이라 State Machine에 된소리 prefix 상태를 별도로 추가해야 처리 가능.
+     * [해결됨] ㅅ {6} — 된소리표와 점형 동일
+     *   State Machine이 EXPECT_INITIAL/EXPECT_FINAL_OR_NEXT_INITIAL에서 {6}을 먼저 가로채
+     *   EXPECT_TENSE_CONSONANT로 진입 후 다음 셀로 된소리 초성/종성(ㄲ/ㄸ/ㅃ/ㅆ/ㅉ, ㄲ받침/ㅆ받침)과 ㅅ초성을 구분.
      *
      * [참고] ㅇ — 초성 점자 없음 (의도적 생략)
      *   모음 셀이 초성 없이 오면 State Machine이 ㅇ 초성으로 자동 처리함.
@@ -55,7 +55,7 @@ object BrailleDecoder {
         setOf(5) to "ㄹ",
         setOf(1, 5) to "ㅁ",
         setOf(4, 5) to "ㅂ",
-        setOf(6) to "ㅅ",           // [미해결] 된소리표와 점형 동일 → 된소리 prefix 로직 미구현
+        setOf(6) to "ㅅ",           // [해결됨] 된소리표와 점형 동일 → State Machine이 EXPECT_TENSE_CONSONANT로 처리
         setOf(4, 6) to "ㅈ",
         setOf(5, 6) to "ㅊ",
         setOf(1, 2, 4) to "ㅋ",
