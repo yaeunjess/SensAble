@@ -1,5 +1,10 @@
 package com.sensable.app.core.designsystem.component
 
+import android.content.Context
+import android.os.Build
+import android.os.VibrationEffect
+import android.os.Vibrator
+import android.os.VibratorManager
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -23,12 +28,28 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.sensable.app.ui.theme.KakaoYellow
 import com.sensable.app.ui.theme.SensableTheme
+
+private fun vibrateTap(context: Context) {
+    val vibrator = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+        context.getSystemService(VibratorManager::class.java).defaultVibrator
+    } else {
+        @Suppress("DEPRECATION")
+        context.getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
+    }
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+        vibrator.vibrate(VibrationEffect.createOneShot(80L, 200))
+    } else {
+        @Suppress("DEPRECATION")
+        vibrator.vibrate(80L)
+    }
+}
 
 /**
  * 3행 2열 점자 인터페이스 그리드 — 쓰기 방향 기준.
@@ -125,12 +146,16 @@ private fun BrailleButton(
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
     val interactionSource = remember { MutableInteractionSource() }
     val isTouching by interactionSource.collectIsPressedAsState()
     val active = isPressed || isTouching
 
     Button(
-        onClick = onClick,
+        onClick = {
+            vibrateTap(context)
+            onClick()
+        },
         shape = CircleShape,
         modifier = modifier.aspectRatio(1f),
         interactionSource = interactionSource,

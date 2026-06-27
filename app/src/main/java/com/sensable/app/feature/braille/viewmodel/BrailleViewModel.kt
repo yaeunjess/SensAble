@@ -29,8 +29,7 @@ class BrailleViewModel @Inject constructor(
         ttsManager.speak(dot.toString())
         when (_uiState.value.mode) {
             BrailleMode.SERVICE_SELECT -> handleServiceSelect(dot)
-            BrailleMode.TRANSFER_RECIPIENT,
-            BrailleMode.TRANSFER_AMOUNT -> toggleDot(dot)
+            BrailleMode.TRANSFER_RECIPIENT, BrailleMode.TRANSFER_AMOUNT -> toggleDot(dot)
         }
     }
 
@@ -77,19 +76,24 @@ class BrailleViewModel @Inject constructor(
         }
 
         val newPendingDisplay = if (!state.isNumberMode) koreanStateMachine.getPendingDisplay() else ""
+
+        // 지금까지 누적된 inputText 뒤에 이번에 완성된 글자(decoded)를 이어 붙여 최종 입력값 갱신
         val newText = state.inputText + decoded
 
+        // [TTS] 디코딩 결과가 있으면 읽어주고, 조합 중인 글자(pendingDisplay)가 남아 있으면 이어서 읽음
+        // 금액 모드에서는 현재까지 입력된 전체 금액을 "000원" 형태로 읽어 누적 금액을 사용자에게 알림
         if (decoded.isNotEmpty()) {
             val spoken = if (state.mode == BrailleMode.TRANSFER_AMOUNT) "${newText}원" else decoded
             ttsManager.speak(spoken)
             if (newPendingDisplay.isNotEmpty()) ttsManager.speakQueued(newPendingDisplay)
         } else if (newPendingDisplay.isNotEmpty()) {
+            // decoded는 없지만 아직 조합 중인 글자가 있는 경우 — 중간 상태를 읽어줌
             ttsManager.speak(newPendingDisplay)
         }
         _uiState.update {
             it.copy(
-                currentCellDots = emptySet(),
-                inputText = newText,
+                currentCellDots = emptySet(),   // 현재 셀 초기화 (다음 글자 입력 준비)
+                inputText = newText,             // 누적 입력 문자열 갱신
                 pendingDisplay = newPendingDisplay,
             )
         }
@@ -99,11 +103,14 @@ class BrailleViewModel @Inject constructor(
     fun onDoubleTap(onNavigateToConfirm: (String, String) -> Unit) {
         val state = _uiState.value
 
+        // 한글 조합 중이던 마지막 글자를 강제로 확정(flush)하여 inputText에 합산
+        // — 더블탭이 확인 동작이므로, 아직 조합 버퍼에 남아 있는 글자도 함께 확정해야 함
         val flushed = if (!state.isNumberMode) koreanStateMachine.flush() else ""
         val finalText = state.inputText + flushed
 
         when (state.mode) {
             BrailleMode.TRANSFER_RECIPIENT -> {
+                // [TTS] 수취인 확정 후 금액 입력 안내 멘트 읽기
                 ttsManager.speak("${finalText}님에게 얼마를 보낼까요?")
                 _uiState.update {
                     it.copy(
