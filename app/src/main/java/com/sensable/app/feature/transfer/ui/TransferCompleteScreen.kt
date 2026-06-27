@@ -133,8 +133,9 @@ fun TransferCompleteScreen(
                 Text(
                     text = buildAnnotatedString {
                         withStyle(style = SpanStyle(color = Color(0xFF00897B))) {
-                            append("${recipient}님에게\n")
+                            append(recipient)
                         }
+                        append("님에게\n")
                         withStyle(style = SpanStyle(color = Color(0xFF00897B))) {
                             append(formattedAmount)
                         }
