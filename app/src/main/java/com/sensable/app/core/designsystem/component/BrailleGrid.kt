@@ -35,7 +35,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.sensable.app.ui.theme.KakaoYellow
+import com.sensable.app.ui.theme.SensableBlue
+import com.sensable.app.ui.theme.SensableBlueContent
 import com.sensable.app.ui.theme.SensableTheme
 
 private fun vibrateTap(context: Context) {
@@ -179,8 +180,8 @@ private fun BrailleButton(
         modifier = modifier.aspectRatio(1f),
         interactionSource = interactionSource,
         colors = ButtonDefaults.buttonColors(
-            containerColor = if (active) KakaoYellow else Color(0xFFDDDDDD),
-            contentColor = if (active) Color.Black else Color.Gray
+            containerColor = if (active) SensableBlue else Color(0xFFDDDDDD),
+            contentColor = if (active) SensableBlueContent else Color.Gray
         )
     ) {
         Text(
