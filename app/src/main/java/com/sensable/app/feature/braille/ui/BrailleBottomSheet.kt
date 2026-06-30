@@ -66,8 +66,8 @@ fun BrailleBottomSheet(
             onSwipeUp = { viewModel.onSwipeUp() },
             onDoubleTap = {
                 viewModel.onDoubleTap { recipient, amount ->
-                    onDismiss()
                     navController.navigate(Screen.TransferConfirm.createRoute(recipient, amount))
+                    onDismiss()
                 }
             },
             modifier = Modifier

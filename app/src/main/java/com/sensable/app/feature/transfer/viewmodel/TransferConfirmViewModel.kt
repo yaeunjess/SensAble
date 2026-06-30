@@ -26,7 +26,7 @@ class TransferConfirmViewModel @Inject constructor(
         val formattedAmount = amount.toLongOrNull()?.let { "%,d원".format(it) } ?: "${amount}원"
         val formattedPostBalance = "%,d원".format(postTransferBalance(amount))
         ttsManager.speakWithCompletion(
-            "받는 분, $recipient, 금액, $formattedAmount, 이체 후 잔액, $formattedPostBalance 입니다. 송금하시겠습니까? 지문을 탭하여 인증해주세요."
+            "받는 분, $recipient, 금액, $formattedAmount, 이체 후 잔액, $formattedPostBalance 입니다. 송금하시겠습니까? 가운데에 지문 인증을 해주세요."
         ) {
             _showFingerprintSheet.value = true
         }

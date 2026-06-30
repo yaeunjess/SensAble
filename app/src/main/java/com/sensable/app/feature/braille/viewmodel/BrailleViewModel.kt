@@ -22,8 +22,8 @@ class BrailleViewModel @Inject constructor(
     private val koreanStateMachine = KoreanBrailleStateMachine()
 
     init {
-        ttsManager.speak("어떤 서비스를 이용하시겠어요?")
-        ttsManager.speakQueued("오른쪽으로 밀어 서비스를 선택하세요.")
+        ttsManager.speak("어떤 서비스를 이용하시겠습니까?")
+        ttsManager.speakQueued("오른쪽 스와이프를 통해 기능을 선택하세요.")
     }
 
     fun onBrailleButtonClick(dot: Int) {
@@ -68,11 +68,12 @@ class BrailleViewModel @Inject constructor(
         if (state.mode == BrailleMode.TRANSFER_RECIPIENT &&
             BrailleDecoder.isNumberPrefix(dots) && !state.isNumberMode
         ) {
-            ttsManager.speak("계좌번호 모드로 전환됐어요. 숫자를 입력해 주세요.")
+            ttsManager.speak("계좌번호를 입력하세요.")
             _uiState.update {
                 it.copy(
                     currentCellDots = emptySet(),
                     isNumberMode = true,
+                    guideMessage = "계좌번호를 입력하세요.",
                     confirmedCells = it.confirmedCells + listOf(dots),
                 )
             }
@@ -101,7 +102,7 @@ class BrailleViewModel @Inject constructor(
             state.inputText.isEmpty() && state.pendingDisplay.isEmpty() &&
             (newText.isNotEmpty() || newPendingDisplay.isNotEmpty())
         ) {
-            ttsManager.speakQueued("위로 스와이프하면 이름을 자동완성해 드려요.")
+            ttsManager.speakQueued("위로 스와이프하면 이름을 자동완성해 드립니다.")
         }
 
         _uiState.update {
@@ -167,7 +168,7 @@ class BrailleViewModel @Inject constructor(
                 } else {
                     finalText
                 }
-                ttsManager.speak("오타 교정을 원하시면 위로 밀어 주세요. 건너뛰려면 두 번 탭하세요.")
+                ttsManager.speak("오타 교정을 원하시면 위 스와이프를 해주세요. 건너뛰려면 두 번 탭하세요.")
                 _uiState.update {
                     it.copy(
                         mode = BrailleMode.TYPO_CORRECTION,
