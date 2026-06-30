@@ -85,6 +85,7 @@ fun BrailleGrid(
     onSwipeLeft: (() -> Unit)? = null,
     onSwipeUp: (() -> Unit)? = null,
     isServiceSelectMode: Boolean = false,
+    isConfirmSelectMode: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     val swipe = remember { SwipeState() }
@@ -132,16 +133,20 @@ fun BrailleGrid(
                 repeat(2) { col ->
                     val dotNumber = row + (1 - col) * 3 + 1
                     val isLeftSide = (col == 0)
-                    val showButton = !isServiceSelectMode || dotNumber in setOf(1, 4)
+                    val twoButtonMode = isServiceSelectMode || isConfirmSelectMode
+                    val showButton = !twoButtonMode || dotNumber in setOf(1, 4)
                     if (showButton) {
-                        val label = if (isServiceSelectMode) {
-                            when (dotNumber) { 4 -> "송금하기"; 1 -> "잔액조회"; else -> "$dotNumber" }
-                        } else "$dotNumber"
+                        val label = when {
+                            isServiceSelectMode -> when (dotNumber) { 4 -> "송금하기"; 1 -> "잔액조회"; else -> "$dotNumber" }
+                            isConfirmSelectMode -> when (dotNumber) { 4 -> "예"; 1 -> "아니요"; else -> "$dotNumber" }
+                            else -> "$dotNumber"
+                        }
                         BrailleButton(
                             label = label,
                             isPressed = dotNumber in pressedDots,
                             isLeftSide = isLeftSide,
                             onClick = { onButtonClick(dotNumber) },
+                            fixedFontSizeSp = if (isConfirmSelectMode) 22f else null,
                             modifier = Modifier.weight(1.5f)
                         )
                     } else {
@@ -173,6 +178,7 @@ private fun BrailleButton(
     isPressed: Boolean,
     isLeftSide: Boolean,
     onClick: () -> Unit,
+    fixedFontSizeSp: Float? = null,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -196,7 +202,7 @@ private fun BrailleButton(
     ) {
         Text(
             text = label,
-            fontSize = when {
+            fontSize = fixedFontSizeSp?.sp ?: when {
                 label.length == 1 -> 36.sp
                 label.length <= 2 -> 24.sp
                 else -> 16.sp

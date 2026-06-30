@@ -62,6 +62,17 @@ class BrailleViewModel @Inject constructor(
             return
         }
 
+        if (state.mode == BrailleMode.TRANSFER_CONFIRM) {
+            val options = listOf(4 to "예", 1 to "아니요")
+            val currentDot = state.currentCellDots.firstOrNull()
+            val currentIdx = options.indexOfFirst { it.first == currentDot }
+            val nextIdx = (currentIdx + 1) % options.size
+            val (nextDot, nextLabel) = options[nextIdx]
+            ttsManager.speak(nextLabel)
+            _uiState.update { it.copy(currentCellDots = setOf(nextDot)) }
+            return
+        }
+
         if (state.mode == BrailleMode.TYPO_CORRECTION) return
         val dots = state.currentCellDots
         if (dots.isEmpty()) return
@@ -216,18 +227,43 @@ class BrailleViewModel @Inject constructor(
                 val postBalance = "%,d원".format(postTransferBalance(finalText))
                 val confirmGuide = "${recipient}님에게 ${formattedAmount}을 보내시겠습니까?\n이체 후 잔액은 ${postBalance}입니다."
                 ttsManager.speak("${recipient}님에게 ${formattedAmount}을 보내시겠습니까? 이체 후 잔액은 ${postBalance}입니다.")
+                ttsManager.speakQueued("오른쪽 스와이프로 선택하고, 두번탭을 통해 확정하세요.")
                 _uiState.update {
                     it.copy(
                         mode = BrailleMode.TRANSFER_CONFIRM,
                         guideMessage = confirmGuide,
+                        confirmRecipient = recipient,
+                        confirmAmount = formattedAmount,
+                        confirmBalance = postBalance,
                         transferAmount = finalText,
-                        currentCellDots = emptySet(),
+                        inputText = "",
+                        pendingDisplay = "",
+                        currentCellDots = setOf(4),
                         confirmedCells = emptyList(),
                     )
                 }
             }
             BrailleMode.TRANSFER_CONFIRM -> {
-                onNavigateToConfirm(state.recipientName, state.transferAmount)
+                val activeDot = state.currentCellDots.firstOrNull()
+                when (activeDot) {
+                    4 -> onNavigateToConfirm(state.recipientName, state.transferAmount)
+                    1 -> {
+                        ttsManager.speak("취소되었습니다.")
+                        _uiState.update {
+                            it.copy(
+                                mode = BrailleMode.TRANSFER_AMOUNT,
+                                guideMessage = "얼마를 보낼까요?",
+                                inputText = state.transferAmount,
+                                pendingDisplay = "",
+                                currentCellDots = emptySet(),
+                                isNumberMode = true,
+                                confirmedCells = emptyList(),
+                                transferAmount = "",
+                            )
+                        }
+                    }
+                    else -> Unit
+                }
             }
         }
     }
@@ -451,6 +487,9 @@ data class BrailleUiState(
     val correctionSuggestions: List<String> = emptyList(),
     val currentSuggestionIndex: Int = -1,
     val autocompleteSuggestion: String = "",
+    val confirmRecipient: String = "",
+    val confirmAmount: String = "",
+    val confirmBalance: String = "",
 )
 
 enum class BrailleMode {

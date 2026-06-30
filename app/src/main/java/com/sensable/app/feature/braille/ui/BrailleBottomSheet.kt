@@ -15,10 +15,13 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalView
+import androidx.core.view.ViewCompat
 import com.sensable.app.ui.theme.SensableBlue
 import com.sensable.app.ui.theme.SensableDarkSurface
 import com.sensable.app.ui.theme.SensableDarkOnSurface
@@ -31,6 +34,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
 import com.sensable.app.core.designsystem.component.BrailleGrid
@@ -57,6 +61,18 @@ fun BrailleBottomSheet(
         containerColor = SensableDarkSurface,
         contentColor = SensableDarkOnSurface,
     ) {
+        val view = LocalView.current
+        DisposableEffect(Unit) {
+            val prev = ViewCompat.getImportantForAccessibility(view)
+            ViewCompat.setImportantForAccessibility(
+                view,
+                ViewCompat.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS
+            )
+            onDispose {
+                ViewCompat.setImportantForAccessibility(view, prev)
+            }
+        }
+
         BrailleBottomSheetContent(
             guideMessage = uiState.guideMessage,
             currentCellDots = uiState.currentCellDots,
@@ -64,6 +80,9 @@ fun BrailleBottomSheet(
             pendingDisplay = uiState.pendingDisplay,
             recipientName = uiState.recipientName,
             autocompleteSuggestion = uiState.autocompleteSuggestion,
+            confirmRecipient = uiState.confirmRecipient,
+            confirmAmount = uiState.confirmAmount,
+            confirmBalance = uiState.confirmBalance,
             mode = uiState.mode,
             onButtonClick = { dot -> viewModel.onBrailleButtonClick(dot) },
             onSwipeRight = { viewModel.onSwipeRight() },
@@ -95,6 +114,9 @@ internal fun BrailleBottomSheetContent(
     onSwipeRight: () -> Unit,
     onDoubleTap: () -> Unit,
     autocompleteSuggestion: String = "",
+    confirmRecipient: String = "",
+    confirmAmount: String = "",
+    confirmBalance: String = "",
     onSwipeLeft: (() -> Unit)? = null,
     onSwipeUp: (() -> Unit)? = null,
     modifier: Modifier = Modifier
@@ -110,7 +132,7 @@ internal fun BrailleBottomSheetContent(
                 .fillMaxWidth()
                 .then(
                     if (mode == BrailleMode.TRANSFER_CONFIRM)
-                        Modifier.heightIn(min = 160.dp)
+                        Modifier.heightIn(min = 200.dp)
                     else
                         Modifier.height(140.dp)
                 )
@@ -121,9 +143,16 @@ internal fun BrailleBottomSheetContent(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
-            // 금액 입력 단계: 수취인 이름 + 안내 문구를 한 줄로 합쳐서 높이 동일하게 유지
-            val guideAnnotated = if (mode == BrailleMode.TRANSFER_AMOUNT && recipientName.isNotEmpty()) {
-                buildAnnotatedString {
+            val guideAnnotated = when {
+                mode == BrailleMode.TRANSFER_CONFIRM && confirmRecipient.isNotEmpty() -> buildAnnotatedString {
+                    withStyle(SpanStyle(color = SensableBlue, fontWeight = FontWeight.SemiBold)) { append(confirmRecipient) }
+                    withStyle(SpanStyle(color = SensableDarkOnSurface)) { append("님에게\n") }
+                    withStyle(SpanStyle(color = SensableBlue, fontWeight = FontWeight.SemiBold)) { append(confirmAmount) }
+                    withStyle(SpanStyle(color = SensableDarkOnSurface)) { append("을 보내시겠습니까?\n이체 후 잔액은 ") }
+                    withStyle(SpanStyle(color = SensableBlue, fontWeight = FontWeight.SemiBold)) { append(confirmBalance) }
+                    withStyle(SpanStyle(color = SensableDarkOnSurface)) { append("입니다.") }
+                }
+                mode == BrailleMode.TRANSFER_AMOUNT && recipientName.isNotEmpty() -> buildAnnotatedString {
                     withStyle(SpanStyle(color = SensableBlue, fontWeight = FontWeight.SemiBold)) {
                         append(recipientName)
                     }
@@ -131,8 +160,7 @@ internal fun BrailleBottomSheetContent(
                         append("님에게 얼마를 보낼까요?")
                     }
                 }
-            } else {
-                buildAnnotatedString {
+                else -> buildAnnotatedString {
                     withStyle(SpanStyle(color = SensableDarkOnSurface)) { append(guideMessage) }
                 }
             }
@@ -140,6 +168,8 @@ internal fun BrailleBottomSheetContent(
             Text(
                 text = guideAnnotated,
                 style = MaterialTheme.typography.titleLarge,
+                fontSize = if (mode == BrailleMode.TRANSFER_CONFIRM) 22.sp else MaterialTheme.typography.titleLarge.fontSize,
+                lineHeight = if (mode == BrailleMode.TRANSFER_CONFIRM) 28.sp else MaterialTheme.typography.titleLarge.lineHeight,
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(bottom = 16.dp),
@@ -194,6 +224,7 @@ internal fun BrailleBottomSheetContent(
             pressedDots = currentCellDots,
             onDoubleTap = onDoubleTap,
             isServiceSelectMode = (mode == BrailleMode.SERVICE_SELECT),
+            isConfirmSelectMode = (mode == BrailleMode.TRANSFER_CONFIRM),
             modifier = Modifier.weight(1f)
         )
     }
