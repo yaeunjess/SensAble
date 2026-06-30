@@ -19,8 +19,10 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
-import com.sensable.app.ui.theme.SensableBlueContent
+import com.sensable.app.ui.theme.SensableBlue
+import com.sensable.app.ui.theme.SensableDarkSurface
+import com.sensable.app.ui.theme.SensableDarkOnSurface
+import com.sensable.app.ui.theme.SensableDarkSubtext
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -51,7 +53,9 @@ fun BrailleBottomSheet(
         sheetState = rememberModalBottomSheetState(
             skipPartiallyExpanded = true,
             confirmValueChange = { false }
-        )
+        ),
+        containerColor = SensableDarkSurface,
+        contentColor = SensableDarkOnSurface,
     ) {
         BrailleBottomSheetContent(
             guideMessage = uiState.guideMessage,
@@ -120,13 +124,17 @@ internal fun BrailleBottomSheetContent(
             // 금액 입력 단계: 수취인 이름 + 안내 문구를 한 줄로 합쳐서 높이 동일하게 유지
             val guideAnnotated = if (mode == BrailleMode.TRANSFER_AMOUNT && recipientName.isNotEmpty()) {
                 buildAnnotatedString {
-                    withStyle(SpanStyle(color = SensableBlueContent, fontWeight = FontWeight.SemiBold)) {
+                    withStyle(SpanStyle(color = SensableBlue, fontWeight = FontWeight.SemiBold)) {
                         append(recipientName)
                     }
-                    append("님에게 얼마를 보낼까요?")
+                    withStyle(SpanStyle(color = SensableDarkOnSurface)) {
+                        append("님에게 얼마를 보낼까요?")
+                    }
                 }
             } else {
-                buildAnnotatedString { append(guideMessage) }
+                buildAnnotatedString {
+                    withStyle(SpanStyle(color = SensableDarkOnSurface)) { append(guideMessage) }
+                }
             }
 
             Text(
@@ -141,7 +149,7 @@ internal fun BrailleBottomSheetContent(
             // 텍스트 표시 영역 — 우선순위: 자동완성/교정 후보 > 원본 입력 > recipientName(오타교정 모드)
             val displayAnnotated = when {
                 autocompleteSuggestion.isNotEmpty() -> buildAnnotatedString {
-                    withStyle(SpanStyle(color = SensableBlueContent, fontWeight = FontWeight.Bold)) {
+                    withStyle(SpanStyle(color = SensableBlue, fontWeight = FontWeight.Bold)) {
                         append(autocompleteSuggestion)
                     }
                 }
@@ -149,18 +157,18 @@ internal fun BrailleBottomSheetContent(
                     val displayInput = if (mode == BrailleMode.TRANSFER_AMOUNT && inputText.isNotEmpty()) {
                         "%,d원".format(inputText.toLongOrNull() ?: 0L)
                     } else inputText
-                    withStyle(SpanStyle(color = Color.Black, fontWeight = FontWeight.Bold)) {
+                    withStyle(SpanStyle(color = SensableDarkOnSurface, fontWeight = FontWeight.Bold)) {
                         append(displayInput)
                     }
                     if (pendingDisplay.isNotEmpty()) {
-                        withStyle(SpanStyle(color = Color.Gray)) {
+                        withStyle(SpanStyle(color = SensableDarkSubtext)) {
                             if (inputText.isNotEmpty()) append(" | ")
                             append(pendingDisplay)
                         }
                     }
                 }
                 mode == BrailleMode.TYPO_CORRECTION && recipientName.isNotEmpty() -> buildAnnotatedString {
-                    withStyle(SpanStyle(color = Color.Black, fontWeight = FontWeight.Bold)) {
+                    withStyle(SpanStyle(color = SensableDarkOnSurface, fontWeight = FontWeight.Bold)) {
                         append(recipientName)
                     }
                 }
