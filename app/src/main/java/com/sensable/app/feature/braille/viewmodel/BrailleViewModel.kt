@@ -3,6 +3,7 @@ package com.sensable.app.feature.braille.viewmodel
 import androidx.lifecycle.ViewModel
 import com.sensable.app.core.braille.BrailleDecoder
 import com.sensable.app.core.braille.KoreanBrailleStateMachine
+import com.sensable.app.core.common.postTransferBalance
 import com.sensable.app.core.tts.TtsManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -34,6 +35,7 @@ class BrailleViewModel @Inject constructor(
                 toggleDot(dot)
             }
             BrailleMode.TYPO_CORRECTION -> Unit
+            BrailleMode.TRANSFER_CONFIRM -> Unit
         }
     }
 
@@ -208,7 +210,24 @@ class BrailleViewModel @Inject constructor(
                 }
             }
             BrailleMode.TRANSFER_AMOUNT -> {
-                onNavigateToConfirm(state.recipientName, finalText)
+                val recipient = state.recipientName
+                val amountLong = finalText.toLongOrNull() ?: 0L
+                val formattedAmount = "%,d원".format(amountLong)
+                val postBalance = "%,d원".format(postTransferBalance(finalText))
+                val confirmGuide = "${recipient}님에게 ${formattedAmount}을 보내시겠습니까?\n이체 후 잔액은 ${postBalance}입니다."
+                ttsManager.speak("${recipient}님에게 ${formattedAmount}을 보내시겠습니까? 이체 후 잔액은 ${postBalance}입니다.")
+                _uiState.update {
+                    it.copy(
+                        mode = BrailleMode.TRANSFER_CONFIRM,
+                        guideMessage = confirmGuide,
+                        transferAmount = finalText,
+                        currentCellDots = emptySet(),
+                        confirmedCells = emptyList(),
+                    )
+                }
+            }
+            BrailleMode.TRANSFER_CONFIRM -> {
+                onNavigateToConfirm(state.recipientName, state.transferAmount)
             }
         }
     }
@@ -318,6 +337,23 @@ class BrailleViewModel @Inject constructor(
                     )
                 }
             }
+            BrailleMode.TRANSFER_CONFIRM -> {
+                val recipient = state.recipientName
+                val formattedAmount = "%,d원".format(state.transferAmount.toLongOrNull() ?: 0L)
+                ttsManager.speak("${recipient}님에게 얼마를 보낼까요?")
+                _uiState.update {
+                    it.copy(
+                        mode = BrailleMode.TRANSFER_AMOUNT,
+                        guideMessage = "얼마를 보낼까요?",
+                        inputText = state.transferAmount,
+                        pendingDisplay = "",
+                        currentCellDots = emptySet(),
+                        isNumberMode = true,
+                        confirmedCells = emptyList(),
+                        transferAmount = "",
+                    )
+                }
+            }
             BrailleMode.SERVICE_SELECT -> return true
             BrailleMode.TYPO_CORRECTION -> Unit
         }
@@ -410,6 +446,7 @@ data class BrailleUiState(
     val inputText: String = "",
     val pendingDisplay: String = "",
     val recipientName: String = "",
+    val transferAmount: String = "",
     val confirmedCells: List<Set<Int>> = emptyList(),
     val correctionSuggestions: List<String> = emptyList(),
     val currentSuggestionIndex: Int = -1,
@@ -420,5 +457,6 @@ enum class BrailleMode {
     SERVICE_SELECT,
     TRANSFER_RECIPIENT,
     TYPO_CORRECTION,
-    TRANSFER_AMOUNT
+    TRANSFER_AMOUNT,
+    TRANSFER_CONFIRM,
 }

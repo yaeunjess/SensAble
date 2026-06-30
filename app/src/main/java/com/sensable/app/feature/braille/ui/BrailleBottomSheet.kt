@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
@@ -99,11 +100,16 @@ internal fun BrailleBottomSheetContent(
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         // 더블탭 감지 영역 (가이드 메시지 + 디코딩 텍스트)
-        // 높이를 고정해서 모든 단계에서 BrailleGrid 버튼 위치가 동일하게 유지됨
+        // 확인 단계는 2줄 문구이므로 높이를 조금 더 확보하고, 나머지 단계는 고정 높이로 버튼 위치 유지
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(140.dp)
+                .then(
+                    if (mode == BrailleMode.TRANSFER_CONFIRM)
+                        Modifier.heightIn(min = 160.dp)
+                    else
+                        Modifier.height(140.dp)
+                )
                 .padding(horizontal = 24.dp)
                 .pointerInput(Unit) {
                     detectTapGestures(onDoubleTap = { onDoubleTap() })
