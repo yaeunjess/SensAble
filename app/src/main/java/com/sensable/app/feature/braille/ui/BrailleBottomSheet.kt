@@ -15,13 +15,10 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalView
-import androidx.core.view.ViewCompat
 import com.sensable.app.ui.theme.SensableBlue
 import com.sensable.app.ui.theme.SensableDarkSurface
 import com.sensable.app.ui.theme.SensableDarkOnSurface
@@ -61,18 +58,6 @@ fun BrailleBottomSheet(
         containerColor = SensableDarkSurface,
         contentColor = SensableDarkOnSurface,
     ) {
-        val view = LocalView.current
-        DisposableEffect(Unit) {
-            val prev = ViewCompat.getImportantForAccessibility(view)
-            ViewCompat.setImportantForAccessibility(
-                view,
-                ViewCompat.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS
-            )
-            onDispose {
-                ViewCompat.setImportantForAccessibility(view, prev)
-            }
-        }
-
         BrailleBottomSheetContent(
             guideMessage = uiState.guideMessage,
             currentCellDots = uiState.currentCellDots,
