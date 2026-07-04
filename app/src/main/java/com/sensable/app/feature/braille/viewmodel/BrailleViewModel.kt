@@ -25,6 +25,7 @@ class BrailleViewModel @Inject constructor(
     init {
         ttsManager.speak("어떤 서비스를 이용하시겠습니까?")
         ttsManager.speakQueued("오른쪽 스와이프를 통해 기능을 선택하세요.")
+        ttsManager.speakQueued("두 번 터치로 기능을 확정하세요.")
     }
 
     fun onBrailleButtonClick(dot: Int) {
@@ -81,12 +82,12 @@ class BrailleViewModel @Inject constructor(
         if (state.mode == BrailleMode.TRANSFER_RECIPIENT &&
             BrailleDecoder.isNumberPrefix(dots) && !state.isNumberMode
         ) {
-            ttsManager.speak("계좌번호를 입력하세요.")
+            ttsManager.speak("계좌번호를 입력하세요")
             _uiState.update {
                 it.copy(
                     currentCellDots = emptySet(),
                     isNumberMode = true,
-                    guideMessage = "계좌번호를 입력하세요.",
+                    guideMessage = "계좌번호를 입력하세요",
                     confirmedCells = it.confirmedCells + listOf(dots),
                 )
             }
@@ -128,8 +129,11 @@ class BrailleViewModel @Inject constructor(
         }
     }
 
-    // onNavigateToConfirm: (recipient, amount) -> Unit
-    fun onDoubleTap(onNavigateToConfirm: (String, String) -> Unit) {
+    fun onFingerprintDismissed() {
+        _uiState.update { it.copy(showFingerprintOverlay = false) }
+    }
+
+    fun onDoubleTap() {
         val state = _uiState.value
 
         val flushed = if (!state.isNumberMode) koreanStateMachine.flush() else ""
@@ -246,7 +250,10 @@ class BrailleViewModel @Inject constructor(
             BrailleMode.TRANSFER_CONFIRM -> {
                 val activeDot = state.currentCellDots.firstOrNull()
                 when (activeDot) {
-                    4 -> onNavigateToConfirm(state.recipientName, state.transferAmount)
+                    4 -> {
+                        ttsManager.speak("지문 인증을 진행해 주세요.")
+                        _uiState.update { it.copy(showFingerprintOverlay = true) }
+                    }
                     1 -> {
                         ttsManager.speak("취소되었습니다.")
                         _uiState.update {
@@ -490,6 +497,7 @@ data class BrailleUiState(
     val confirmRecipient: String = "",
     val confirmAmount: String = "",
     val confirmBalance: String = "",
+    val showFingerprintOverlay: Boolean = false,
 )
 
 enum class BrailleMode {
