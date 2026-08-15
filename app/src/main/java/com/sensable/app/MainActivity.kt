@@ -17,6 +17,7 @@ class MainActivity : AppCompatActivity() {
 
     // @Inject 어노테이션을 통해 Hilt로 의존성 주입을 관리하고 있다는 것을 알수 있음
     // lateinit이 붙는 이유는? (나중에 초기화)
+    //준혁 온보딩
     @Inject lateinit var ttsManager: TtsManager
 
     override fun onCreate(savedInstanceState: Bundle?) {
