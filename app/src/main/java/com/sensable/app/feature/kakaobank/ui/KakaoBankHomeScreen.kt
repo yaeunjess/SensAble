@@ -1,5 +1,7 @@
 package com.sensable.app.feature.kakaobank.ui
 
+import android.app.Activity
+import android.widget.Toast
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -25,14 +27,19 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
-import androidx.navigation.compose.rememberNavController
 import com.sensable.app.R
 import com.sensable.app.core.common.MOCK_BALANCE
-import com.sensable.app.feature.braille.ui.BrailleBottomSheet
-import com.sensable.app.feature.kakaobank.viewmodel.KakaoBankViewModel
+import com.sensable.app.core.navigation.Screen
 import com.sensable.app.ui.theme.SensableTheme
+import com.finclue.sdk.Finclue
+import com.finclue.sdk.api.FieldSpec
+import com.finclue.sdk.api.FieldType
+import com.finclue.sdk.api.FlowResult
+import com.finclue.sdk.api.FlowSpec
+import com.finclue.sdk.storage.LocalDataSummary
+import androidx.compose.ui.platform.LocalContext
+import kotlinx.coroutines.launch
 
 private val KakaoBackground = Color(0xFFF7F7F7)
 private val KakaoBlue = Color(0xFFA2B5E8)
@@ -51,25 +58,74 @@ private val bottomNavItems = listOf(
 
 @Composable
 fun KakaoBankHomeScreen(
-    navController: NavController,
-    viewModel: KakaoBankViewModel = hiltViewModel()
+    navController: NavController
 ) {
-    val uiState by viewModel.uiState.collectAsState()
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var showLocalData by remember { mutableStateOf(false) }
+    var localData by remember { mutableStateOf<LocalDataSummary?>(null) }
+
+    fun refreshLocalData() {
+        scope.launch { localData = Finclue.getLocalDataSummary(context) }
+    }
+
     KakaoBankHomeContent(
-        isBrailleVisible = uiState.isBrailleVisible,
-        onSwipeUp = { viewModel.showBrailleInterface() },
-        onDismiss = { viewModel.hideBrailleInterface() },
-        navController = navController
+        onSwipeUp = {
+            val activity = context as? Activity ?: return@KakaoBankHomeContent
+            Finclue.runFlow(activity, transferFlowSpec()) { result ->
+                when (result) {
+                    is FlowResult.Success -> {
+                        val account = result.values.getValue("toAccount")
+                        val amount = result.values.getValue("amount")
+                        navController.navigate(Screen.TransferComplete.createRoute(account, amount))
+                    }
+                    FlowResult.Cancelled -> Toast.makeText(context, "FIN:CLUE 입력을 취소했습니다", Toast.LENGTH_SHORT).show()
+                    is FlowResult.Error -> Toast.makeText(context, result.message, Toast.LENGTH_SHORT).show()
+                }
+            }
+        },
+        onShowLocalData = {
+            showLocalData = true
+            refreshLocalData()
+        },
     )
+
+    if (showLocalData) {
+        LocalDataDialog(
+            summary = localData,
+            onDismiss = { showLocalData = false },
+            onClear = {
+                scope.launch {
+                    Finclue.clearLocalData(context)
+                    localData = Finclue.getLocalDataSummary(context)
+                }
+            },
+        )
+    }
 }
+
+private fun transferFlowSpec() = FlowSpec(
+    fields = listOf(
+        FieldSpec(
+            key = "toAccount",
+            type = FieldType.ACCOUNT,
+            label = "받는 계좌",
+            prompt = "받는 분 계좌번호를 입력하세요",
+        ),
+        FieldSpec(
+            key = "amount",
+            type = FieldType.AMOUNT,
+            label = "보낼 금액",
+            prompt = "보낼 금액을 입력하세요",
+        ),
+    )
+)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun KakaoBankHomeContent(
-    isBrailleVisible: Boolean,
     onSwipeUp: () -> Unit,
-    onDismiss: () -> Unit,
-    navController: NavController
+    onShowLocalData: () -> Unit,
 ) {
     var selectedNavIndex by remember { mutableIntStateOf(0) }
     val scrollState = rememberScrollState()
@@ -113,6 +169,12 @@ fun KakaoBankHomeContent(
             ) {
                 // BannerSection()
                 AccountCard(userName = "김예은", balance = "%,d원".format(MOCK_BALANCE))
+                OutlinedButton(
+                    onClick = onShowLocalData,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text("FIN:CLUE 온디바이스 데이터 확인")
+                }
                 ServicePromotionCard()
                 AddServiceCard()
                 FooterLinks()
@@ -120,15 +182,38 @@ fun KakaoBankHomeContent(
                 
                 Spacer(modifier = Modifier.height(32.dp))
             }
-
-            if (isBrailleVisible) {
-                BrailleBottomSheet(
-                    onDismiss = onDismiss,
-                    navController = navController
-                )
-            }
         }
     }
+}
+
+@Composable
+private fun LocalDataDialog(
+    summary: LocalDataSummary?,
+    onDismiss: () -> Unit,
+    onClear: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("FIN:CLUE 온디바이스 데이터") },
+        text = {
+            if (summary == null) {
+                CircularProgressIndicator()
+            } else {
+                Text(
+                    "네트워크 권한: 없음\n" +
+                        "저장 위치: 앱 전용 Room DB\n\n" +
+                        "전체 실행: ${summary.totalSessions}회\n" +
+                        "완료: ${summary.completedSessions}회\n" +
+                        "취소: ${summary.cancelledSessions}회\n" +
+                        "오류: ${summary.errorSessions}회\n" +
+                        "기록된 필드: ${summary.recordedFields}개\n" +
+                        "평균 완료 시간: ${summary.averageCompletedDurationMillis ?: 0L}ms"
+                )
+            }
+        },
+        confirmButton = { TextButton(onClick = onDismiss) { Text("확인") } },
+        dismissButton = { TextButton(onClick = onClear) { Text("로컬 데이터 초기화") } },
+    )
 }
 
 @Composable
@@ -430,10 +515,8 @@ private fun KakaoBankBottomNavigationBar(
 private fun KakaoBankHomeScreenPreview() {
     SensableTheme {
         KakaoBankHomeContent(
-            isBrailleVisible = false,
             onSwipeUp = {},
-            onDismiss = {},
-            navController = rememberNavController()
+            onShowLocalData = {},
         )
     }
 }
