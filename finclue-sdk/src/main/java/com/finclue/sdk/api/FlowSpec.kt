@@ -26,7 +26,6 @@ data class FieldSpec(
 }
 
 enum class FieldType {
-    TEXT,
     ACCOUNT,
     AMOUNT,
     PIN,

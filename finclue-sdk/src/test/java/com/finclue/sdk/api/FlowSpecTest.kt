@@ -22,8 +22,8 @@ class FlowSpecTest {
         assertThrows(IllegalArgumentException::class.java) {
             FlowSpec(
                 fields = listOf(
-                    FieldSpec("value", FieldType.TEXT, "첫 번째", "입력하세요"),
-                    FieldSpec("value", FieldType.TEXT, "두 번째", "입력하세요"),
+                    FieldSpec("value", FieldType.ACCOUNT, "첫 번째", "입력하세요"),
+                    FieldSpec("value", FieldType.AMOUNT, "두 번째", "입력하세요"),
                 )
             )
         }

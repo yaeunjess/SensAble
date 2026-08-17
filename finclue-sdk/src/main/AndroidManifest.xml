@@ -1,4 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <!-- Deliberately no INTERNET permission: the MVP operates on-device only. -->
+    <uses-permission android:name="android.permission.VIBRATE" />
+
+    <application>
+        <activity
+            android:name="com.finclue.sdk.internal.FinclueFlowActivity"
+            android:exported="false"
+            android:theme="@style/Theme.Finclue.Flow" />
+    </application>
 </manifest>
