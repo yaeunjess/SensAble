@@ -24,5 +24,6 @@ internal object LlamaNativeRuntime {
         prefix: String,
         candidateCount: Int,
         maxTokens: Int,
+        seedOffset: Int,
     ): Array<String>
 }

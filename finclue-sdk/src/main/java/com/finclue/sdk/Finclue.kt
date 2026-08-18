@@ -61,6 +61,13 @@ object Finclue {
         request: PredictionRequest,
     ): List<PredictionCandidate> = engine(context).suggest(request)
 
+    /** Returns matching personal history without loading or running the language model. */
+    @JvmStatic
+    suspend fun requestPersonalPredictions(
+        context: Context,
+        request: PredictionRequest,
+    ): List<PredictionCandidate> = engine(context).suggestPersonal(request)
+
     /** Records only a candidate that the user explicitly selected and the host allowed to persist. */
     @JvmStatic
     suspend fun recordPredictionSelection(

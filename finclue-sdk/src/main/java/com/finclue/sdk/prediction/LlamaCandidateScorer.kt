@@ -39,19 +39,31 @@ internal class LlamaCandidateScorer(context: Context) {
     ): List<String> = mutex.withLock {
         if (prefix.isBlank() || count <= 0) return@withLock emptyList()
         ensureLoaded()
-        val generated = withContext(Dispatchers.Default) {
-            LlamaNativeRuntime.generateCandidates(
-                conditioningText = predictionContext.conditioningText(),
-                prefix = prefix,
-                candidateCount = count,
-                maxTokens = predictionContext.maxGeneratedTokens,
+        val accepted = linkedSetOf<String>()
+        suspend fun generateBatch(candidateCount: Int, seedOffset: Int) {
+            val generated = withContext(Dispatchers.Default) {
+                LlamaNativeRuntime.generateCandidates(
+                    conditioningText = predictionContext.conditioningText(),
+                    prefix = prefix,
+                    candidateCount = candidateCount,
+                    maxTokens = predictionContext.maxGeneratedTokens,
+                    seedOffset = seedOffset,
+                )
+            }
+            generated.asSequence()
+                .flatMap { GeneratedCandidateValidator.validate(predictionContext, prefix, it) }
+                .forEach(accepted::add)
+        }
+
+        val initialAttempts = count.coerceAtMost(INITIAL_GENERATION_ATTEMPTS)
+        generateBatch(initialAttempts, seedOffset = 0)
+        if (accepted.size < count && initialAttempts < MAX_GENERATION_ATTEMPTS) {
+            generateBatch(
+                candidateCount = MAX_GENERATION_ATTEMPTS - initialAttempts,
+                seedOffset = initialAttempts,
             )
         }
-        generated.asSequence()
-            .flatMap { GeneratedCandidateValidator.validate(predictionContext, prefix, it) }
-            .distinct()
-            .take(count)
-            .toList()
+        accepted.take(count)
     }
 
     suspend fun close() = mutex.withLock {
@@ -101,6 +113,8 @@ internal class LlamaCandidateScorer(context: Context) {
         const val CONTEXT_SIZE = 256
         const val MAX_PERSON_NAME_GENERATED_TOKENS = 6
         const val MAX_GENERAL_GENERATED_TOKENS = 8
+        const val INITIAL_GENERATION_ATTEMPTS = 3
+        const val MAX_GENERATION_ATTEMPTS = 6
     }
 }
 

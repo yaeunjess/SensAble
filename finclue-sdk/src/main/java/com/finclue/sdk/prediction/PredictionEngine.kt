@@ -36,6 +36,19 @@ internal class PredictionEngine(context: Context) {
         limit = request.limit,
     )
 
+    suspend fun suggestPersonal(request: PredictionRequest): List<PredictionCandidate> {
+        if (request.mode != PredictionMode.PERSONALIZED || request.currentText.isBlank()) {
+            return emptyList()
+        }
+        val personal = historyStore.findByPrefix(
+            context = request.context,
+            prefix = request.currentText,
+            policy = request.historyPolicy,
+            limit = PERSONAL_CANDIDATE_LIMIT,
+        )
+        return ranker.rank(CandidateMerger.merge(emptyList(), personal), request.limit)
+    }
+
     private suspend fun suggest(
         predictionContext: PredictionContext,
         prefix: String,
@@ -74,7 +87,7 @@ internal class PredictionEngine(context: Context) {
         val generated = scorer.generate(
             predictionContext,
             prefix,
-            GENERATED_CANDIDATE_LIMIT,
+            limit.coerceAtMost(GENERATED_CANDIDATE_LIMIT),
         )
         val scored = scorer.score(
             predictionContext,

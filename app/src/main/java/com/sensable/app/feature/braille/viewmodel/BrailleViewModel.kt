@@ -449,12 +449,12 @@ class BrailleViewModel @Inject constructor(
         if (state.mode != BrailleMode.TRANSFER_RECIPIENT &&
             state.mode != BrailleMode.TYPO_CORRECTION
         ) return
-        if (state.isPredictionLoading) {
-            ttsManager.speak("추천을 준비하고 있습니다.")
-            return
-        }
         if (state.correctionSuggestions.isNotEmpty()) {
             speakNextSuggestion(state.correctionSuggestions, state.currentSuggestionIndex)
+            return
+        }
+        if (state.isPredictionLoading) {
+            ttsManager.speak("추천을 준비하고 있습니다.")
             return
         }
 
@@ -477,17 +477,27 @@ class BrailleViewModel @Inject constructor(
         }
         ttsManager.speak("추천을 준비하고 있습니다.")
         viewModelScope.launch {
+            val request = PredictionRequest(
+                currentText = currentText,
+                mode = PredictionMode.PERSONALIZED,
+                context = PredictionContext.PERSON_NAME,
+                historyPolicy = HistoryPolicy.READ_WRITE,
+                limit = 3,
+            )
+            val personalSuggestions = runCatching {
+                Finclue.requestPersonalPredictions(appContext, request).map { it.text }
+            }.getOrDefault(emptyList())
+            if (personalSuggestions.isNotEmpty()) {
+                _uiState.update {
+                    it.copy(
+                        guideMessage = "개인 입력 이력에서 추천을 찾았습니다. AI 추천을 추가하고 있습니다.",
+                        correctionSuggestions = personalSuggestions,
+                    )
+                }
+                speakNextSuggestion(personalSuggestions, -1)
+            }
             val suggestions = runCatching {
-                Finclue.requestPredictions(
-                    appContext,
-                    PredictionRequest(
-                        currentText = currentText,
-                        mode = PredictionMode.PERSONALIZED,
-                        context = PredictionContext.PERSON_NAME,
-                        historyPolicy = HistoryPolicy.READ_WRITE,
-                        limit = 3,
-                    ),
-                ).map { it.text }
+                Finclue.requestPredictions(appContext, request).map { it.text }
             }.getOrElse {
                 ttsManager.speak("추천을 불러오지 못했습니다. 입력은 계속할 수 있습니다.")
                 _uiState.update {
@@ -506,6 +516,17 @@ class BrailleViewModel @Inject constructor(
                 return@launch
             }
             _uiState.update { it.copy(isPredictionLoading = false) }
+            if (personalSuggestions.isNotEmpty()) {
+                val mergedSuggestions = (suggestions + personalSuggestions).distinct().take(3)
+                _uiState.update {
+                    it.copy(
+                        guideMessage = "추천 이름 ${mergedSuggestions.size}개입니다. 위로 밀어 탐색하고 두 번 눌러 선택하세요.",
+                        correctionSuggestions = mergedSuggestions,
+                        currentSuggestionIndex = mergedSuggestions.indexOf(it.autocompleteSuggestion),
+                    )
+                }
+                return@launch
+            }
             if (suggestions.isEmpty()) {
                 ttsManager.speak("일치하는 이름을 찾지 못했습니다.")
                 _uiState.update {

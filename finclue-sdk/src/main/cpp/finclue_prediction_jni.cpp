@@ -92,22 +92,11 @@ std::string token_piece(const llama_vocab * vocab, llama_token token) {
     return std::string(buffer.data(), static_cast<size_t>(count));
 }
 
-std::string generate_candidate(
-        const std::string & conditioning,
+std::string generate_candidate_from_cached_prompt(
         const std::string & prefix,
         int32_t max_tokens,
         uint32_t seed) {
     const llama_vocab * vocab = llama_model_get_vocab(model);
-    const auto prompt_tokens = tokenize(vocab, conditioning + prefix);
-    if (prompt_tokens.empty()) throw std::runtime_error("Generation prompt is empty.");
-
-    llama_memory_clear(llama_get_memory(context), true);
-    if (llama_decode(context, llama_batch_get_one(
-            const_cast<llama_token *>(prompt_tokens.data()),
-            static_cast<int32_t>(prompt_tokens.size()))) != 0) {
-        throw std::runtime_error("Generation prompt decode failed.");
-    }
-
     auto sampler_params = llama_sampler_chain_default_params();
     sampler_params.no_perf = true;
     llama_sampler * sampler = llama_sampler_chain_init(sampler_params);
@@ -241,13 +230,15 @@ Java_com_finclue_sdk_prediction_LlamaNativeRuntime_generateCandidates(
         jstring conditioning_text,
         jstring prefix_text,
         jint candidate_count,
-        jint max_tokens) {
+        jint max_tokens,
+        jint seed_offset) {
     std::lock_guard<std::mutex> lock(runtime_mutex);
     if (model == nullptr || context == nullptr) {
         throw_illegal_state(env, "Prediction model is not loaded.");
         return nullptr;
     }
-    if (candidate_count <= 0 || candidate_count > 32 || max_tokens <= 0 || max_tokens > 32) {
+    if (candidate_count <= 0 || candidate_count > 32 || max_tokens <= 0 || max_tokens > 32 ||
+        seed_offset < 0 || seed_offset > 1024) {
         throw_illegal_state(env, "Invalid generation limits.");
         return nullptr;
     }
@@ -255,14 +246,35 @@ Java_com_finclue_sdk_prediction_LlamaNativeRuntime_generateCandidates(
     try {
         const std::string conditioning = to_string(env, conditioning_text);
         const std::string prefix = to_string(env, prefix_text);
+        const llama_vocab * vocab = llama_model_get_vocab(model);
+        const auto prompt_tokens = tokenize(vocab, conditioning + prefix);
+        if (prompt_tokens.empty()) throw std::runtime_error("Generation prompt is empty.");
+
+        // Keep every common prompt token except the final one in the KV cache. Re-decoding only
+        // that final token restores the same next-token logits for each independently sampled
+        // candidate without evaluating the full instruction repeatedly.
+        llama_memory_t memory = llama_get_memory(context);
+        llama_memory_clear(memory, true);
+        const int32_t cached_token_count = static_cast<int32_t>(prompt_tokens.size()) - 1;
+        if (cached_token_count > 0 && llama_decode(context, llama_batch_get_one(
+                const_cast<llama_token *>(prompt_tokens.data()), cached_token_count)) != 0) {
+            throw std::runtime_error("Generation prompt cache decode failed.");
+        }
+
         const jclass string_class = env->FindClass("java/lang/String");
         jobjectArray result = env->NewObjectArray(candidate_count, string_class, nullptr);
         for (jint index = 0; index < candidate_count; ++index) {
-            const std::string candidate = generate_candidate(
-                conditioning,
+            if (!llama_memory_seq_rm(memory, 0, cached_token_count, -1)) {
+                throw std::runtime_error("Could not restore generation prompt cache.");
+            }
+            llama_token final_prompt_token = prompt_tokens.back();
+            if (llama_decode(context, llama_batch_get_one(&final_prompt_token, 1)) != 0) {
+                throw std::runtime_error("Generation prompt final-token decode failed.");
+            }
+            const std::string candidate = generate_candidate_from_cached_prompt(
                 prefix,
                 max_tokens,
-                0xF1C1u + static_cast<uint32_t>(index) * 7919u);
+                0xF1C1u + static_cast<uint32_t>(seed_offset + index) * 7919u);
             jstring value = env->NewStringUTF(candidate.c_str());
             env->SetObjectArrayElement(result, index, value);
             env->DeleteLocalRef(value);
