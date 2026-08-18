@@ -1,0 +1,7 @@
+.venv/
+.convert-venv/
+models/
+.cache/
+third_party/
+__pycache__/
+*.gguf

@@ -20,7 +20,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
@@ -31,6 +34,7 @@ import androidx.navigation.NavController
 import com.sensable.app.R
 import com.sensable.app.core.common.MOCK_BALANCE
 import com.sensable.app.core.navigation.Screen
+import com.sensable.app.feature.braille.ui.BrailleBottomSheet
 import com.sensable.app.ui.theme.SensableTheme
 import com.finclue.sdk.Finclue
 import com.finclue.sdk.api.FieldSpec
@@ -63,6 +67,7 @@ fun KakaoBankHomeScreen(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var showLocalData by remember { mutableStateOf(false) }
+    var showBrailleTransfer by remember { mutableStateOf(false) }
     var localData by remember { mutableStateOf<LocalDataSummary?>(null) }
 
     fun refreshLocalData() {
@@ -71,24 +76,20 @@ fun KakaoBankHomeScreen(
 
     KakaoBankHomeContent(
         onSwipeUp = {
-            val activity = context as? Activity ?: return@KakaoBankHomeContent
-            Finclue.runFlow(activity, transferFlowSpec()) { result ->
-                when (result) {
-                    is FlowResult.Success -> {
-                        val account = result.values.getValue("toAccount")
-                        val amount = result.values.getValue("amount")
-                        navController.navigate(Screen.TransferComplete.createRoute(account, amount))
-                    }
-                    FlowResult.Cancelled -> Toast.makeText(context, "FIN:CLUE 입력을 취소했습니다", Toast.LENGTH_SHORT).show()
-                    is FlowResult.Error -> Toast.makeText(context, result.message, Toast.LENGTH_SHORT).show()
-                }
-            }
+            showBrailleTransfer = true
         },
         onShowLocalData = {
             showLocalData = true
             refreshLocalData()
         },
     )
+
+    if (showBrailleTransfer) {
+        BrailleBottomSheet(
+            onDismiss = { showBrailleTransfer = false },
+            navController = navController,
+        )
+    }
 
     if (showLocalData) {
         LocalDataDialog(
@@ -129,12 +130,26 @@ fun KakaoBankHomeContent(
 ) {
     var selectedNavIndex by remember { mutableIntStateOf(0) }
     val scrollState = rememberScrollState()
-    val nestedScrollConnection = remember {
+    val swipeThreshold = with(LocalDensity.current) { 96.dp.toPx() }
+    val nestedScrollConnection = remember(onSwipeUp, swipeThreshold) {
         object : NestedScrollConnection {
-            override suspend fun onPreFling(available: Velocity): Velocity {
-                if (available.y < -500f) {
+            var upwardDistance = 0f
+            var triggered = false
+
+            override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
+                if (source == NestedScrollSource.UserInput && available.y < 0f && !triggered) {
+                    upwardDistance += -available.y
+                }
+                if (upwardDistance >= swipeThreshold && !triggered) {
+                    triggered = true
                     onSwipeUp()
                 }
+                return Offset.Zero
+            }
+
+            override suspend fun onPostFling(consumed: Velocity, available: Velocity): Velocity {
+                upwardDistance = 0f
+                triggered = false
                 return Velocity.Zero
             }
         }
@@ -168,7 +183,11 @@ fun KakaoBankHomeContent(
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 // BannerSection()
-                AccountCard(userName = "김예은", balance = "%,d원".format(MOCK_BALANCE))
+                AccountCard(
+                    userName = "김예은",
+                    balance = "%,d원".format(MOCK_BALANCE),
+                    onTransferClick = onSwipeUp,
+                )
                 OutlinedButton(
                     onClick = onShowLocalData,
                     modifier = Modifier.fillMaxWidth(),
@@ -232,7 +251,7 @@ private fun BannerSection() {
 }
 
 @Composable
-private fun AccountCard(userName: String, balance: String) {
+private fun AccountCard(userName: String, balance: String, onTransferClick: () -> Unit) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
         color = KakaoBlue,
@@ -291,19 +310,19 @@ private fun AccountCard(userName: String, balance: String) {
                 modifier = Modifier.align(Alignment.End),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                AccountSmallButton(text = "카드")
-                AccountSmallButton(text = "이체")
+                AccountSmallButton(text = "카드", onClick = {})
+                AccountSmallButton(text = "이체", onClick = onTransferClick)
             }
         }
     }
 }
 
 @Composable
-private fun AccountSmallButton(text: String) {
+private fun AccountSmallButton(text: String, onClick: () -> Unit) {
     Surface(
         color = Color.Black.copy(alpha = 0.05f),
         shape = RoundedCornerShape(8.dp),
-        onClick = {}
+        onClick = onClick
     ) {
         Text(
             text = text,

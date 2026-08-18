@@ -42,5 +42,5 @@ internal class LocalDataStore(context: Context) {
         lastUsedAtEpochMillis = dao.lastUsedAtEpochMillis(),
     )
 
-    suspend fun clear() = dao.clearAllSessions()
+    suspend fun clear() = dao.clearAllLocalData()
 }

@@ -17,11 +17,19 @@ data class FieldSpec(
     val type: FieldType,
     val label: String,
     val prompt: String,
+    val predictionMode: PredictionMode = PredictionMode.DISABLED,
+    val predictionContext: PredictionContext = PredictionContext.GENERAL,
+    val historyPolicy: HistoryPolicy = HistoryPolicy.NONE,
 ) {
     init {
         require(key.isNotBlank()) { "FieldSpec.key must not be blank." }
         require(label.isNotBlank()) { "FieldSpec.label must not be blank." }
         require(prompt.isNotBlank()) { "FieldSpec.prompt must not be blank." }
+        require(
+            predictionMode == PredictionMode.PERSONALIZED || historyPolicy == HistoryPolicy.NONE
+        ) {
+            "HistoryPolicy requires PredictionMode.PERSONALIZED."
+        }
     }
 }
 

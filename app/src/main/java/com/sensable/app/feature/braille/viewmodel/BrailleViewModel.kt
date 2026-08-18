@@ -1,11 +1,21 @@
 package com.sensable.app.feature.braille.viewmodel
 
+import android.content.Context
+import androidx.lifecycle.viewModelScope
+import com.finclue.sdk.Finclue
+import com.finclue.sdk.api.HistoryPolicy
+import com.finclue.sdk.api.PredictionContext
+import com.finclue.sdk.api.PredictionMode
+import com.finclue.sdk.api.PredictionRequest
+import com.finclue.sdk.api.PredictionSelection
 import androidx.lifecycle.ViewModel
 import com.sensable.app.core.braille.BrailleDecoder
 import com.sensable.app.core.braille.KoreanBrailleStateMachine
 import com.sensable.app.core.common.postTransferBalance
 import com.sensable.app.core.tts.TtsManager
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -14,6 +24,7 @@ import javax.inject.Inject
 
 @HiltViewModel
 class BrailleViewModel @Inject constructor(
+    @ApplicationContext private val appContext: Context,
     private val ttsManager: TtsManager
 ) : ViewModel() {
 
@@ -184,6 +195,9 @@ class BrailleViewModel @Inject constructor(
                     state.correctionSuggestions[state.currentSuggestionIndex]
                 } else {
                     finalText
+                }
+                if (state.currentSuggestionIndex >= 0 && state.correctionSuggestions.isNotEmpty()) {
+                    recordAutocompleteSelection(confirmedName)
                 }
                 ttsManager.speak("오타 교정을 원하시면 위 스와이프를 해주세요. 건너뛰려면 두 번 탭하세요.")
                 _uiState.update {
@@ -434,6 +448,57 @@ class BrailleViewModel @Inject constructor(
     fun onSwipeUp() {
         val state = _uiState.value
 
+        if (state.mode == BrailleMode.TRANSFER_RECIPIENT) {
+            if (state.isPredictionLoading) {
+                ttsManager.speak("추천을 준비하고 있습니다.")
+                return
+            }
+            if (state.correctionSuggestions.isNotEmpty()) {
+                speakNextSuggestion(state.correctionSuggestions, state.currentSuggestionIndex)
+                return
+            }
+
+            val currentText = state.inputText + state.pendingDisplay
+            if (currentText.isBlank()) {
+                ttsManager.speak("한 글자 이상 입력한 뒤 위로 밀어 주세요.")
+                return
+            }
+            _uiState.update { it.copy(isPredictionLoading = true) }
+            ttsManager.speak("추천을 준비하고 있습니다.")
+            viewModelScope.launch {
+                val suggestions = runCatching {
+                    Finclue.requestPredictions(
+                        appContext,
+                        PredictionRequest(
+                            currentText = currentText,
+                            mode = PredictionMode.PERSONALIZED,
+                            context = PredictionContext.PERSON_NAME,
+                            historyPolicy = HistoryPolicy.READ_WRITE,
+                            limit = 3,
+                        ),
+                    ).map { it.text }
+                }.getOrElse {
+                    ttsManager.speak("추천을 불러오지 못했습니다. 입력은 계속할 수 있습니다.")
+                    emptyList()
+                }
+                val latest = _uiState.value
+                if (latest.mode != BrailleMode.TRANSFER_RECIPIENT ||
+                    latest.inputText + latest.pendingDisplay != currentText
+                ) {
+                    _uiState.update { it.copy(isPredictionLoading = false) }
+                    return@launch
+                }
+                _uiState.update { it.copy(isPredictionLoading = false) }
+                if (suggestions.isEmpty()) {
+                    ttsManager.speak("일치하는 이름을 찾지 못했습니다.")
+                } else {
+                    _uiState.update { it.copy(correctionSuggestions = suggestions) }
+                    speakNextSuggestion(suggestions, -1)
+                }
+            }
+            return
+        }
+
         val suggestions = when (state.mode) {
             BrailleMode.TYPO_CORRECTION -> state.correctionSuggestions.ifEmpty {
                 getMockCorrectionSuggestions(state.recipientName)
@@ -459,6 +524,32 @@ class BrailleViewModel @Inject constructor(
                 correctionSuggestions = suggestions,
                 currentSuggestionIndex = nextIndex,
                 autocompleteSuggestion = suggestion,
+            )
+        }
+    }
+
+    private fun speakNextSuggestion(suggestions: List<String>, currentIndex: Int) {
+        val nextIndex = (currentIndex + 1) % suggestions.size
+        val suggestion = suggestions[nextIndex]
+        ttsManager.speak(suggestion)
+        _uiState.update {
+            it.copy(
+                correctionSuggestions = suggestions,
+                currentSuggestionIndex = nextIndex,
+                autocompleteSuggestion = suggestion,
+            )
+        }
+    }
+
+    private fun recordAutocompleteSelection(text: String) {
+        viewModelScope.launch {
+            Finclue.recordPredictionSelection(
+                appContext,
+                PredictionSelection(
+                    text = text,
+                    context = PredictionContext.PERSON_NAME,
+                    historyPolicy = HistoryPolicy.READ_WRITE,
+                ),
             )
         }
     }
@@ -498,6 +589,7 @@ data class BrailleUiState(
     val confirmAmount: String = "",
     val confirmBalance: String = "",
     val showFingerprintOverlay: Boolean = false,
+    val isPredictionLoading: Boolean = false,
 )
 
 enum class BrailleMode {

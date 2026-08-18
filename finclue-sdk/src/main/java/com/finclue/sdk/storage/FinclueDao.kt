@@ -2,7 +2,9 @@ package com.finclue.sdk.storage
 
 import androidx.room.Dao
 import androidx.room.Insert
+import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import androidx.room.Transaction
 
 @Dao
 internal interface FinclueDao {
@@ -50,4 +52,60 @@ internal interface FinclueDao {
 
     @Query("DELETE FROM flow_sessions")
     suspend fun clearAllSessions()
+
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insertPredictionHistoryIfAbsent(history: PredictionHistoryEntity): Long
+
+    @Query(
+        """
+        UPDATE prediction_history
+        SET selectionCount = selectionCount + 1,
+            displayText = :displayText,
+            lastSelectedAtEpochMillis = :selectedAt
+        WHERE contextKey = :contextKey AND normalizedText = :normalizedText
+        """
+    )
+    suspend fun incrementPredictionHistory(
+        contextKey: String,
+        normalizedText: String,
+        displayText: String,
+        selectedAt: Long,
+    )
+
+    @Transaction
+    suspend fun recordPredictionSelection(history: PredictionHistoryEntity) {
+        val inserted = insertPredictionHistoryIfAbsent(history)
+        if (inserted == -1L) {
+            incrementPredictionHistory(
+                contextKey = history.contextKey,
+                normalizedText = history.normalizedText,
+                displayText = history.displayText,
+                selectedAt = history.lastSelectedAtEpochMillis,
+            )
+        }
+    }
+
+    @Query(
+        """
+        SELECT * FROM prediction_history
+        WHERE contextKey = :contextKey
+          AND substr(normalizedText, 1, length(:normalizedPrefix)) = :normalizedPrefix
+        ORDER BY selectionCount DESC, lastSelectedAtEpochMillis DESC
+        LIMIT :limit
+        """
+    )
+    suspend fun findPredictionHistory(
+        contextKey: String,
+        normalizedPrefix: String,
+        limit: Int,
+    ): List<PredictionHistoryEntity>
+
+    @Query("DELETE FROM prediction_history")
+    suspend fun clearPredictionHistory()
+
+    @Transaction
+    suspend fun clearAllLocalData() {
+        clearAllSessions()
+        clearPredictionHistory()
+    }
 }
