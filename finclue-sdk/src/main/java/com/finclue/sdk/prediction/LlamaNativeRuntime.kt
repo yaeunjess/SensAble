@@ -18,4 +18,11 @@ internal object LlamaNativeRuntime {
     external fun unloadModel()
 
     external fun scoreCandidates(conditioningText: String, candidates: Array<String>): FloatArray
+
+    external fun generateCandidates(
+        conditioningText: String,
+        prefix: String,
+        candidateCount: Int,
+        maxTokens: Int,
+    ): Array<String>
 }

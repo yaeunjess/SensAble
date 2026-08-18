@@ -6,6 +6,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import java.text.Normalizer
 
 internal class LlamaCandidateScorer(context: Context) {
     private val installer = BundledModelInstaller(context)
@@ -29,6 +30,28 @@ internal class LlamaCandidateScorer(context: Context) {
         }
         check(scores.size == validCandidates.size) { "Native scorer returned an invalid result." }
         validCandidates.mapIndexed { index, text -> LmCandidate(text, scores[index]) }
+    }
+
+    suspend fun generate(
+        predictionContext: PredictionContext,
+        prefix: String,
+        count: Int,
+    ): List<String> = mutex.withLock {
+        if (prefix.isBlank() || count <= 0) return@withLock emptyList()
+        ensureLoaded()
+        val generated = withContext(Dispatchers.Default) {
+            LlamaNativeRuntime.generateCandidates(
+                conditioningText = predictionContext.conditioningText(),
+                prefix = prefix,
+                candidateCount = count,
+                maxTokens = MAX_GENERATED_TOKENS,
+            )
+        }
+        generated.asSequence()
+            .flatMap { predictionContext.validateGenerated(prefix, it) }
+            .distinct()
+            .take(count)
+            .toList()
     }
 
     suspend fun close() = mutex.withLock {
@@ -57,7 +80,37 @@ internal class LlamaCandidateScorer(context: Context) {
         PredictionContext.PRODUCT_NAME -> "입력 유형: 상품명\n자동완성: "
     }
 
+    private fun PredictionContext.validateGenerated(prefix: String, value: String): Sequence<String> {
+        val normalizedPrefix = Normalizer.normalize(prefix.trim(), Normalizer.Form.NFC)
+        if (this == PredictionContext.PERSON_NAME) {
+            val remainingCharacters = (MAX_PERSON_NAME_CHARACTERS - normalizedPrefix.length)
+                .coerceAtLeast(0)
+            if (remainingCharacters == 0 || normalizedPrefix.any { it !in '\uAC00'..'\uD7A3' }) {
+                return emptySequence()
+            }
+            val normalizedValue = Normalizer.normalize(value, Normalizer.Form.NFC)
+            val namePattern = Regex(
+                "${Regex.escape(normalizedPrefix)}[가-힣]{1,$remainingCharacters}",
+            )
+            return namePattern.findAll(normalizedValue)
+                .map(MatchResult::value)
+                .filter { it.length in MIN_PERSON_NAME_CHARACTERS..MAX_PERSON_NAME_CHARACTERS }
+        }
+
+        val firstSegment = value.lineSequence().firstOrNull().orEmpty()
+            .substringBefore(',').substringBefore(';').substringBefore(':')
+            .trim().trimEnd('.', '!', '?', '。')
+        val candidate = Normalizer.normalize(firstSegment, Normalizer.Form.NFC)
+        if (candidate == normalizedPrefix || !candidate.startsWith(normalizedPrefix)) return emptySequence()
+        if (candidate.any(Char::isISOControl)) return emptySequence()
+        return sequenceOf(candidate).filter { it.length <= MAX_GENERAL_CHARACTERS }
+    }
+
     private companion object {
         const val CONTEXT_SIZE = 256
+        const val MAX_GENERATED_TOKENS = 8
+        const val MAX_GENERAL_CHARACTERS = 30
+        const val MIN_PERSON_NAME_CHARACTERS = 2
+        const val MAX_PERSON_NAME_CHARACTERS = 5
     }
 }

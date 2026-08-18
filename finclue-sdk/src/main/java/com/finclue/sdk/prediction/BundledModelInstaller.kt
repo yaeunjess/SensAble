@@ -51,9 +51,9 @@ internal class BundledModelInstaller(context: Context) {
     private fun File.readTextOrNull(): String? = runCatching { readText() }.getOrNull()
 
     private companion object {
-        const val MODEL_FILE_NAME = "qwen2.5-0.5b-q4_k_m.gguf"
+        const val MODEL_FILE_NAME = "polyglot-ko-1.3b-q4_k_m.gguf"
         const val MODEL_ASSET_PATH = "finclue/prediction/model/$MODEL_FILE_NAME"
-        const val MODEL_SIZE = 397_807_328L
-        const val MODEL_SHA256 = "598d21e97a78b449111b27e37b7a55571ee35acf01ccec267accea748f1a1932"
+        const val MODEL_SIZE = 859_539_552L
+        const val MODEL_SHA256 = "7057dde69d3f15cc5e756d00d08cd3cd77fbc81a5716c80548645affe21193a7"
     }
 }

@@ -1,16 +1,15 @@
 {
-  "modelId": "Qwen/Qwen2.5-0.5B",
-  "sourceRevision": "060db6499f32faf8b98477b0a26969ef7d8b9987",
+  "modelId": "EleutherAI/polyglot-ko-1.3b",
+  "sourceRevision": "557e162cf6e944fdbae05bab2e45d066a125eacb",
   "runtime": "llama.cpp",
   "converterRevision": "169e4a7ff201e666c2325bcd35afb64573e39d09",
   "format": "GGUF V3",
   "quantization": "Q4_K_M",
-  "fileName": "qwen2.5-0.5b-q4_k_m.gguf",
-  "fileSizeBytes": 397807328,
-  "sha256": "598D21E97A78B449111B27E37B7A55571EE35ACF01CCEC267ACCEA748F1A1932",
+  "fileName": "polyglot-ko-1.3b-q4_k_m.gguf",
+  "fileSizeBytes": 859539552,
+  "sha256": "7057DDE69D3F15CC5E756D00D08CD3CD77FBC81A5716C80548645AFFE21193A7",
   "license": "Apache-2.0",
-  "contextLength": 32768,
-  "mvpContextLength": 512,
-  "notes": "Q4_K_M conversion used llama.cpp fallback quantization for tensors whose dimensions are not compatible with K-quants."
+  "contextLength": 2048,
+  "mvpContextLength": 256,
+  "notes": "Experimental Korean generation model. Its tokenizer is GPT-2 ByteLevel BPE with an unused sentinel-removal pre-step and is exported with tokenizer.ggml.pre=gpt-2."
 }
-

@@ -196,9 +196,6 @@ class BrailleViewModel @Inject constructor(
                 } else {
                     finalText
                 }
-                if (state.currentSuggestionIndex >= 0 && state.correctionSuggestions.isNotEmpty()) {
-                    recordAutocompleteSelection(confirmedName)
-                }
                 ttsManager.speak("오타 교정을 원하시면 위 스와이프를 해주세요. 건너뛰려면 두 번 탭하세요.")
                 _uiState.update {
                     it.copy(
@@ -221,6 +218,7 @@ class BrailleViewModel @Inject constructor(
                 } else {
                     state.recipientName
                 }
+                recordConfirmedPersonalName(confirmedName)
                 ttsManager.speak("${confirmedName}님에게 얼마를 보낼까요?")
                 _uiState.update {
                     it.copy(
@@ -448,83 +446,83 @@ class BrailleViewModel @Inject constructor(
     fun onSwipeUp() {
         val state = _uiState.value
 
-        if (state.mode == BrailleMode.TRANSFER_RECIPIENT) {
-            if (state.isPredictionLoading) {
-                ttsManager.speak("추천을 준비하고 있습니다.")
-                return
-            }
-            if (state.correctionSuggestions.isNotEmpty()) {
-                speakNextSuggestion(state.correctionSuggestions, state.currentSuggestionIndex)
-                return
-            }
-
-            val currentText = state.inputText + state.pendingDisplay
-            if (currentText.isBlank()) {
-                ttsManager.speak("한 글자 이상 입력한 뒤 위로 밀어 주세요.")
-                return
-            }
-            _uiState.update { it.copy(isPredictionLoading = true) }
+        if (state.mode != BrailleMode.TRANSFER_RECIPIENT &&
+            state.mode != BrailleMode.TYPO_CORRECTION
+        ) return
+        if (state.isPredictionLoading) {
             ttsManager.speak("추천을 준비하고 있습니다.")
-            viewModelScope.launch {
-                val suggestions = runCatching {
-                    Finclue.requestPredictions(
-                        appContext,
-                        PredictionRequest(
-                            currentText = currentText,
-                            mode = PredictionMode.PERSONALIZED,
-                            context = PredictionContext.PERSON_NAME,
-                            historyPolicy = HistoryPolicy.READ_WRITE,
-                            limit = 3,
-                        ),
-                    ).map { it.text }
-                }.getOrElse {
-                    ttsManager.speak("추천을 불러오지 못했습니다. 입력은 계속할 수 있습니다.")
-                    emptyList()
-                }
-                val latest = _uiState.value
-                if (latest.mode != BrailleMode.TRANSFER_RECIPIENT ||
-                    latest.inputText + latest.pendingDisplay != currentText
-                ) {
-                    _uiState.update { it.copy(isPredictionLoading = false) }
-                    return@launch
-                }
-                _uiState.update { it.copy(isPredictionLoading = false) }
-                if (suggestions.isEmpty()) {
-                    ttsManager.speak("일치하는 이름을 찾지 못했습니다.")
-                } else {
-                    _uiState.update { it.copy(correctionSuggestions = suggestions) }
-                    speakNextSuggestion(suggestions, -1)
-                }
-            }
+            return
+        }
+        if (state.correctionSuggestions.isNotEmpty()) {
+            speakNextSuggestion(state.correctionSuggestions, state.currentSuggestionIndex)
             return
         }
 
-        val suggestions = when (state.mode) {
-            BrailleMode.TYPO_CORRECTION -> state.correctionSuggestions.ifEmpty {
-                getMockCorrectionSuggestions(state.recipientName)
-            }
-            BrailleMode.TRANSFER_RECIPIENT -> state.correctionSuggestions.ifEmpty {
-                getMockAutocompleteSuggestions()
-            }
+        val requestMode = state.mode
+        val currentText = when (requestMode) {
+            BrailleMode.TRANSFER_RECIPIENT -> state.inputText + state.pendingDisplay
+            BrailleMode.TYPO_CORRECTION -> state.recipientName
             else -> return
         }
-
-        if (suggestions.isEmpty()) {
-            ttsManager.speak("일치하는 이름을 찾지 못했어요.")
+        if (currentText.isBlank()) {
+            ttsManager.speak("한 글자 이상 입력한 뒤 위로 밀어 주세요.")
             return
         }
-
-        val nextIndex = (state.currentSuggestionIndex + 1) % suggestions.size
-        val suggestion = suggestions[nextIndex]
-        ttsManager.speak(suggestion)
-
-        // 두 모드 모두 autocompleteSuggestion에 저장 — UI에서 같은 자리에 표시
         _uiState.update {
             it.copy(
-                correctionSuggestions = suggestions,
-                currentSuggestionIndex = nextIndex,
-                autocompleteSuggestion = suggestion,
+                isPredictionLoading = true,
+                guideMessage = "'$currentText' 추천을 준비하고 있습니다.",
+                autocompleteSuggestion = "",
             )
+        }
+        ttsManager.speak("추천을 준비하고 있습니다.")
+        viewModelScope.launch {
+            val suggestions = runCatching {
+                Finclue.requestPredictions(
+                    appContext,
+                    PredictionRequest(
+                        currentText = currentText,
+                        mode = PredictionMode.PERSONALIZED,
+                        context = PredictionContext.PERSON_NAME,
+                        historyPolicy = HistoryPolicy.READ_WRITE,
+                        limit = 3,
+                    ),
+                ).map { it.text }
+            }.getOrElse {
+                ttsManager.speak("추천을 불러오지 못했습니다. 입력은 계속할 수 있습니다.")
+                _uiState.update {
+                    it.copy(guideMessage = "추천을 불러오지 못했습니다. 입력은 계속할 수 있습니다.")
+                }
+                emptyList()
+            }
+            val latest = _uiState.value
+            val latestText = when (requestMode) {
+                BrailleMode.TRANSFER_RECIPIENT -> latest.inputText + latest.pendingDisplay
+                BrailleMode.TYPO_CORRECTION -> latest.recipientName
+                else -> ""
+            }
+            if (latest.mode != requestMode || latestText != currentText) {
+                _uiState.update { it.copy(isPredictionLoading = false) }
+                return@launch
+            }
+            _uiState.update { it.copy(isPredictionLoading = false) }
+            if (suggestions.isEmpty()) {
+                ttsManager.speak("일치하는 이름을 찾지 못했습니다.")
+                _uiState.update {
+                    it.copy(
+                        guideMessage = "'$currentText'로 시작하는 이름을 찾지 못했습니다.",
+                        autocompleteSuggestion = "",
+                    )
+                }
+            } else {
+                _uiState.update {
+                    it.copy(
+                        guideMessage = "추천 이름 ${suggestions.size}개입니다. 위로 밀어 탐색하고 두 번 탭해 선택하세요.",
+                        correctionSuggestions = suggestions,
+                    )
+                }
+                speakNextSuggestion(suggestions, -1)
+            }
         }
     }
 
@@ -541,7 +539,7 @@ class BrailleViewModel @Inject constructor(
         }
     }
 
-    private fun recordAutocompleteSelection(text: String) {
+    private fun recordConfirmedPersonalName(text: String) {
         viewModelScope.launch {
             Finclue.recordPredictionSelection(
                 appContext,
@@ -552,18 +550,6 @@ class BrailleViewModel @Inject constructor(
                 ),
             )
         }
-    }
-
-    private val mockNamePool = listOf("김봄", "김보미", "김별", "김봄비", "김보람")
-
-    // 목업 오타교정 후보 — 입력값 제외 후 항상 3개 반환
-    private fun getMockCorrectionSuggestions(input: String): List<String> {
-        return mockNamePool.filter { it != input }.take(3)
-    }
-
-    // 목업 자동완성 후보 — 최근 이체 내역 상위 3개
-    private fun getMockAutocompleteSuggestions(): List<String> {
-        return mockNamePool.take(3)
     }
 
     fun reset() {

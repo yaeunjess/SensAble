@@ -79,6 +79,60 @@ float score_candidate(const std::string & conditioning, const std::string & cand
     return static_cast<float>(total / scored);
 }
 
+std::string token_piece(const llama_vocab * vocab, llama_token token) {
+    std::vector<char> buffer(128);
+    int32_t count = llama_token_to_piece(vocab, token, buffer.data(),
+                                         static_cast<int32_t>(buffer.size()), 0, true);
+    if (count < 0) {
+        buffer.resize(static_cast<size_t>(-count));
+        count = llama_token_to_piece(vocab, token, buffer.data(),
+                                     static_cast<int32_t>(buffer.size()), 0, true);
+    }
+    if (count < 0) throw std::runtime_error("Could not decode generated token.");
+    return std::string(buffer.data(), static_cast<size_t>(count));
+}
+
+std::string generate_candidate(
+        const std::string & conditioning,
+        const std::string & prefix,
+        int32_t max_tokens,
+        uint32_t seed) {
+    const llama_vocab * vocab = llama_model_get_vocab(model);
+    const auto prompt_tokens = tokenize(vocab, conditioning + prefix);
+    if (prompt_tokens.empty()) throw std::runtime_error("Generation prompt is empty.");
+
+    llama_memory_clear(llama_get_memory(context), true);
+    if (llama_decode(context, llama_batch_get_one(
+            const_cast<llama_token *>(prompt_tokens.data()),
+            static_cast<int32_t>(prompt_tokens.size()))) != 0) {
+        throw std::runtime_error("Generation prompt decode failed.");
+    }
+
+    auto sampler_params = llama_sampler_chain_default_params();
+    sampler_params.no_perf = true;
+    llama_sampler * sampler = llama_sampler_chain_init(sampler_params);
+    llama_sampler_chain_add(sampler, llama_sampler_init_top_k(40));
+    llama_sampler_chain_add(sampler, llama_sampler_init_top_p(0.90f, 1));
+    llama_sampler_chain_add(sampler, llama_sampler_init_temp(0.75f));
+    llama_sampler_chain_add(sampler, llama_sampler_init_dist(seed));
+
+    std::string result = prefix;
+    for (int32_t index = 0; index < max_tokens; ++index) {
+        const llama_token token = llama_sampler_sample(sampler, context, -1);
+        if (llama_vocab_is_eog(vocab, token)) break;
+        const std::string piece = token_piece(vocab, token);
+        if (piece.find('\n') != std::string::npos || piece.find('\r') != std::string::npos) break;
+        result += piece;
+        llama_token mutable_token = token;
+        if (llama_decode(context, llama_batch_get_one(&mutable_token, 1)) != 0) {
+            llama_sampler_free(sampler);
+            throw std::runtime_error("Generated token decode failed.");
+        }
+    }
+    llama_sampler_free(sampler);
+    return result;
+}
+
 void unload_locked() {
     if (context != nullptr) {
         llama_free(context);
@@ -172,6 +226,46 @@ Java_com_finclue_sdk_prediction_LlamaNativeRuntime_scoreCandidates(
         jfloatArray result = env->NewFloatArray(count);
         if (result != nullptr && count > 0) {
             env->SetFloatArrayRegion(result, 0, count, scores.data());
+        }
+        return result;
+    } catch (const std::exception & error) {
+        throw_illegal_state(env, error.what());
+        return nullptr;
+    }
+}
+
+extern "C" JNIEXPORT jobjectArray JNICALL
+Java_com_finclue_sdk_prediction_LlamaNativeRuntime_generateCandidates(
+        JNIEnv * env,
+        jobject,
+        jstring conditioning_text,
+        jstring prefix_text,
+        jint candidate_count,
+        jint max_tokens) {
+    std::lock_guard<std::mutex> lock(runtime_mutex);
+    if (model == nullptr || context == nullptr) {
+        throw_illegal_state(env, "Prediction model is not loaded.");
+        return nullptr;
+    }
+    if (candidate_count <= 0 || candidate_count > 32 || max_tokens <= 0 || max_tokens > 32) {
+        throw_illegal_state(env, "Invalid generation limits.");
+        return nullptr;
+    }
+
+    try {
+        const std::string conditioning = to_string(env, conditioning_text);
+        const std::string prefix = to_string(env, prefix_text);
+        const jclass string_class = env->FindClass("java/lang/String");
+        jobjectArray result = env->NewObjectArray(candidate_count, string_class, nullptr);
+        for (jint index = 0; index < candidate_count; ++index) {
+            const std::string candidate = generate_candidate(
+                conditioning,
+                prefix,
+                max_tokens,
+                0xF1C1u + static_cast<uint32_t>(index) * 7919u);
+            jstring value = env->NewStringUTF(candidate.c_str());
+            env->SetObjectArrayElement(result, index, value);
+            env->DeleteLocalRef(value);
         }
         return result;
     } catch (const std::exception & error) {

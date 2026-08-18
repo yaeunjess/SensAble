@@ -8,7 +8,6 @@ import com.finclue.sdk.api.PredictionSelection
 import com.finclue.sdk.api.PredictionMode
 
 internal class PredictionEngine(context: Context) {
-    private val candidateProvider = AssetGeneralCandidateProvider(context)
     private val historyStore = PredictionHistoryStore(context)
     private val scorer = LlamaCandidateScorer(context)
     private val ranker = PersonalRanker()
@@ -17,8 +16,6 @@ internal class PredictionEngine(context: Context) {
         if (field.predictionMode == PredictionMode.DISABLED || prefix.isBlank() || limit <= 0) {
             return emptyList()
         }
-        val general = candidateProvider.findByPrefix(prefix, GENERAL_CANDIDATE_LIMIT)
-        val scored = scorer.score(field.predictionContext, prefix, general)
         val personal = if (field.predictionMode == PredictionMode.PERSONALIZED) {
             historyStore.findByPrefix(
                 context = field.predictionContext,
@@ -29,12 +26,16 @@ internal class PredictionEngine(context: Context) {
         } else {
             emptyList()
         }
+        val generated = scorer.generate(field.predictionContext, prefix, GENERATED_CANDIDATE_LIMIT)
+        val scored = scorer.score(
+            field.predictionContext,
+            prefix,
+            (generated + personal.map(PersonalCandidate::text)).distinct(),
+        )
         return ranker.rank(CandidateMerger.merge(scored, personal), limit)
     }
 
     suspend fun suggest(request: PredictionRequest): List<PredictionCandidate> {
-        val general = candidateProvider.findByPrefix(request.currentText, GENERAL_CANDIDATE_LIMIT)
-        val scored = scorer.score(request.context, request.currentText, general)
         val personal = if (request.mode == PredictionMode.PERSONALIZED) {
             historyStore.findByPrefix(
                 context = request.context,
@@ -45,6 +46,16 @@ internal class PredictionEngine(context: Context) {
         } else {
             emptyList()
         }
+        val generated = scorer.generate(
+            request.context,
+            request.currentText,
+            GENERATED_CANDIDATE_LIMIT,
+        )
+        val scored = scorer.score(
+            request.context,
+            request.currentText,
+            (generated + personal.map(PersonalCandidate::text)).distinct(),
+        )
         return ranker.rank(CandidateMerger.merge(scored, personal), request.limit)
     }
 
@@ -60,7 +71,7 @@ internal class PredictionEngine(context: Context) {
     suspend fun close() = scorer.close()
 
     private companion object {
-        const val GENERAL_CANDIDATE_LIMIT = 16
+        const val GENERATED_CANDIDATE_LIMIT = 8
         const val PERSONAL_CANDIDATE_LIMIT = 16
     }
 }
