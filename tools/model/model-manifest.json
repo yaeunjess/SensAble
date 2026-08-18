@@ -1,15 +1,15 @@
 {
-  "modelId": "EleutherAI/polyglot-ko-1.3b",
-  "sourceRevision": "557e162cf6e944fdbae05bab2e45d066a125eacb",
+  "modelId": "LGAI-EXAONE/EXAONE-4.0-1.2B-GGUF",
+  "sourceRevision": "162446400ea4596377a3ce1d3ddffa32971af0a6",
   "runtime": "llama.cpp",
   "converterRevision": "169e4a7ff201e666c2325bcd35afb64573e39d09",
   "format": "GGUF V3",
   "quantization": "Q4_K_M",
-  "fileName": "polyglot-ko-1.3b-q4_k_m.gguf",
-  "fileSizeBytes": 859539552,
-  "sha256": "7057DDE69D3F15CC5E756D00D08CD3CD77FBC81A5716C80548645AFFE21193A7",
-  "license": "Apache-2.0",
-  "contextLength": 2048,
+  "fileName": "exaone-4.0-1.2b-q4_k_m.gguf",
+  "fileSizeBytes": 812437792,
+  "sha256": "7B5E753540183AE4D56E6FEBD9B48CDD944DE53386E6FAA8F51C8F98CB2B47DF",
+  "license": "EXAONE AI Model License Agreement 1.2 - NC",
+  "contextLength": 32768,
   "mvpContextLength": 256,
-  "notes": "Experimental Korean generation model. Its tokenizer is GPT-2 ByteLevel BPE with an unused sentinel-removal pre-step and is exported with tokenizer.ggml.pre=gpt-2."
+  "notes": "Experimental Korean-English on-device instruction model. Commercial deployment requires a separate license agreement with LG AI Research."
 }

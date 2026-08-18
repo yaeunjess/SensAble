@@ -71,13 +71,23 @@ internal class LlamaCandidateScorer(context: Context) {
         loaded = true
     }
 
-    private fun PredictionContext.conditioningText(): String = when (this) {
-        PredictionContext.GENERAL -> "입력 유형: 일반 텍스트\n자동완성: "
-        PredictionContext.BANK_NAME -> "입력 유형: 은행명\n자동완성: "
-        PredictionContext.PERSON_NAME -> "입력 유형: 사람 이름\n자동완성: "
-        PredictionContext.ORGANIZATION_NAME -> "입력 유형: 기관명\n자동완성: "
-        PredictionContext.ADDRESS -> "입력 유형: 주소\n자동완성: "
-        PredictionContext.PRODUCT_NAME -> "입력 유형: 상품명\n자동완성: "
+    private fun PredictionContext.conditioningText(): String {
+        val typeLabel = when (this) {
+            PredictionContext.GENERAL -> "일반 텍스트"
+            PredictionContext.BANK_NAME -> "은행명"
+            PredictionContext.PERSON_NAME -> "한국 사람 이름"
+            PredictionContext.ORGANIZATION_NAME -> "기관명"
+            PredictionContext.ADDRESS -> "대한민국 주소"
+            PredictionContext.PRODUCT_NAME -> "상품명"
+        }
+        return buildString {
+            append("[|system|]\n")
+            append("당신은 한국어 자동완성 엔진입니다. 설명 없이 요청한 유형의 완성 결과 하나만 출력합니다.")
+            append("[|endofturn|]\n[|user|]\n")
+            append("입력 유형: ").append(typeLabel).append('\n')
+            append("사용자가 입력한 글자로 시작하는 자연스러운 완성 결과 하나를 출력하세요.")
+            append("[|endofturn|]\n[|assistant|]\n<think>\n\n</think>\n\n")
+        }
     }
 
     private val PredictionContext.maxGeneratedTokens: Int
