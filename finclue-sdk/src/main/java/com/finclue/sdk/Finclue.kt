@@ -51,6 +51,7 @@ object Finclue {
     @JvmStatic
     suspend fun clearLocalData(context: Context) {
         LocalDataStore(context).clear()
+        predictionEngine?.clearCache()
     }
 
     /** Runs prediction only when explicitly requested by the host, such as on an up-swipe. */

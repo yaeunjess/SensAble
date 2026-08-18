@@ -82,7 +82,9 @@ class KoreanBrailleStateMachine {
     /** 현재 조합 중인 음절 미리보기. 초성만 있으면 자모, 초성+중성이면 결합 음절. */
     fun getPendingDisplay(): String {
         val initial = pendingInitial ?: return ""
-        val vowel = pendingVowel
+        val vowel = pendingVowel ?: pendingFirstVowelDots
+            ?.let(BrailleDecoder.vowelTable::get)
+            ?.let(VOWEL_INDEX::get)
         return if (vowel == null) {
             INITIAL_CONSONANTS.getOrElse(initial) { "" }
         } else {

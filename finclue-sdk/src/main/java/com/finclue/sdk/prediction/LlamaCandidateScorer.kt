@@ -44,11 +44,11 @@ internal class LlamaCandidateScorer(context: Context) {
                 conditioningText = predictionContext.conditioningText(),
                 prefix = prefix,
                 candidateCount = count,
-                maxTokens = MAX_GENERATED_TOKENS,
+                maxTokens = predictionContext.maxGeneratedTokens,
             )
         }
         generated.asSequence()
-            .flatMap { predictionContext.validateGenerated(prefix, it) }
+            .flatMap { GeneratedCandidateValidator.validate(predictionContext, prefix, it) }
             .distinct()
             .take(count)
             .toList()
@@ -80,21 +80,45 @@ internal class LlamaCandidateScorer(context: Context) {
         PredictionContext.PRODUCT_NAME -> "입력 유형: 상품명\n자동완성: "
     }
 
-    private fun PredictionContext.validateGenerated(prefix: String, value: String): Sequence<String> {
+    private val PredictionContext.maxGeneratedTokens: Int
+        get() = if (this == PredictionContext.PERSON_NAME) {
+            MAX_PERSON_NAME_GENERATED_TOKENS
+        } else {
+            MAX_GENERAL_GENERATED_TOKENS
+        }
+
+    private companion object {
+        const val CONTEXT_SIZE = 256
+        const val MAX_PERSON_NAME_GENERATED_TOKENS = 6
+        const val MAX_GENERAL_GENERATED_TOKENS = 8
+    }
+}
+
+internal object GeneratedCandidateValidator {
+    private val personNameSeparator = Regex("[,;:/|\\r\\n]+")
+    private val hangulName = Regex("[가-힣]+")
+
+    fun validate(
+        context: PredictionContext,
+        prefix: String,
+        value: String,
+    ): Sequence<String> {
         val normalizedPrefix = Normalizer.normalize(prefix.trim(), Normalizer.Form.NFC)
-        if (this == PredictionContext.PERSON_NAME) {
-            val remainingCharacters = (MAX_PERSON_NAME_CHARACTERS - normalizedPrefix.length)
-                .coerceAtLeast(0)
-            if (remainingCharacters == 0 || normalizedPrefix.any { it !in '\uAC00'..'\uD7A3' }) {
+        if (context == PredictionContext.PERSON_NAME) {
+            if (normalizedPrefix.length >= MAX_PERSON_NAME_CHARACTERS ||
+                normalizedPrefix.any { it !in '\uAC00'..'\uD7A3' }
+            ) {
                 return emptySequence()
             }
             val normalizedValue = Normalizer.normalize(value, Normalizer.Form.NFC)
-            val namePattern = Regex(
-                "${Regex.escape(normalizedPrefix)}[가-힣]{1,$remainingCharacters}",
-            )
-            return namePattern.findAll(normalizedValue)
-                .map(MatchResult::value)
-                .filter { it.length in MIN_PERSON_NAME_CHARACTERS..MAX_PERSON_NAME_CHARACTERS }
+            return normalizedValue.splitToSequence(personNameSeparator)
+                .map { it.trim().trim('.', '!', '?', '。') }
+                .filter { candidate ->
+                    candidate.startsWith(normalizedPrefix) &&
+                        candidate != normalizedPrefix &&
+                        candidate.length in MIN_PERSON_NAME_CHARACTERS..MAX_PERSON_NAME_CHARACTERS &&
+                        hangulName.matches(candidate)
+                }
         }
 
         val firstSegment = value.lineSequence().firstOrNull().orEmpty()
@@ -106,11 +130,7 @@ internal class LlamaCandidateScorer(context: Context) {
         return sequenceOf(candidate).filter { it.length <= MAX_GENERAL_CHARACTERS }
     }
 
-    private companion object {
-        const val CONTEXT_SIZE = 256
-        const val MAX_GENERATED_TOKENS = 8
-        const val MAX_GENERAL_CHARACTERS = 30
-        const val MIN_PERSON_NAME_CHARACTERS = 2
-        const val MAX_PERSON_NAME_CHARACTERS = 5
-    }
+    private const val MAX_GENERAL_CHARACTERS = 30
+    private const val MIN_PERSON_NAME_CHARACTERS = 2
+    private const val MAX_PERSON_NAME_CHARACTERS = 4
 }
