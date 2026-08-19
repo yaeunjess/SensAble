@@ -1,6 +1,8 @@
 package com.finclue.sdk.prediction
 
 import android.content.Context
+import android.os.SystemClock
+import android.util.Log
 import com.finclue.sdk.api.FieldSpec
 import com.finclue.sdk.api.PredictionCandidate
 import com.finclue.sdk.api.PredictionRequest
@@ -14,6 +16,12 @@ internal class PredictionEngine(context: Context) {
     private val scorer = LlamaCandidateScorer(context)
     private val ranker = PersonalRanker()
     private val resultCache = PredictionResultCache(MAX_CACHE_ENTRIES)
+
+    suspend fun prewarm() {
+        val startedAt = SystemClock.elapsedRealtime()
+        scorer.prewarm()
+        Log.i(TAG, "prediction prewarm completed in ${SystemClock.elapsedRealtime() - startedAt} ms")
+    }
 
     suspend fun suggest(field: FieldSpec, prefix: String, limit: Int = 3): List<PredictionCandidate> {
         if (field.predictionMode == PredictionMode.DISABLED || prefix.isBlank() || limit <= 0) {
@@ -84,15 +92,27 @@ internal class PredictionEngine(context: Context) {
             ).also { resultCache[cacheKey] = it }
         }
 
+        val generationStartedAt = SystemClock.elapsedRealtime()
         val generated = scorer.generate(
             predictionContext,
             prefix,
             limit.coerceAtMost(GENERATED_CANDIDATE_LIMIT),
         )
+        val generationMillis = SystemClock.elapsedRealtime() - generationStartedAt
+        val scoringStartedAt = SystemClock.elapsedRealtime()
         val scored = scorer.score(
             predictionContext,
             prefix,
             (generated + personal.map(PersonalCandidate::text)).distinct(),
+        )
+        val scoringMillis = SystemClock.elapsedRealtime() - scoringStartedAt
+        val rescoredOrder = scored.sortedByDescending(LmCandidate::logProbability)
+            .map { candidate -> generated.indexOf(candidate.text) }
+        Log.i(
+            TAG,
+            "prediction timing context=${predictionContext.storageKey} " +
+                "generated=${generated.size} generationMs=$generationMillis " +
+                "scored=${scored.size} scoringMs=$scoringMillis rescoredOrder=$rescoredOrder",
         )
         return ranker.rank(CandidateMerger.merge(scored, personal), limit)
             .also { resultCache[cacheKey] = it }
@@ -118,6 +138,7 @@ internal class PredictionEngine(context: Context) {
     suspend fun close() = scorer.close()
 
     private companion object {
+        const val TAG = "FincluePrediction"
         const val GENERATED_CANDIDATE_LIMIT = 6
         const val PERSONAL_CANDIDATE_LIMIT = 16
         const val MAX_CACHE_ENTRIES = 64

@@ -62,6 +62,10 @@ internal class LlamaCandidateScorer(context: Context) {
         }
     }
 
+    suspend fun prewarm() = mutex.withLock {
+        ensureLoaded()
+    }
+
     private suspend fun ensureLoaded() {
         if (loaded) return
         val model = installer.installIfNeeded()

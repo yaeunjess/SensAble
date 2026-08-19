@@ -61,6 +61,12 @@ object Finclue {
         request: PredictionRequest,
     ): List<PredictionCandidate> = engine(context).suggest(request)
 
+    /** Loads the bundled model before the first explicit prediction request. */
+    @JvmStatic
+    suspend fun prewarmPredictions(context: Context) {
+        engine(context).prewarm()
+    }
+
     /** Returns matching personal history without loading or running the language model. */
     @JvmStatic
     suspend fun requestPersonalPredictions(

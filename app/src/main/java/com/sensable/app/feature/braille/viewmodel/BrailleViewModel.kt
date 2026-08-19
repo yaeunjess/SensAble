@@ -34,6 +34,9 @@ class BrailleViewModel @Inject constructor(
     private val koreanStateMachine = KoreanBrailleStateMachine()
 
     init {
+        viewModelScope.launch {
+            runCatching { Finclue.prewarmPredictions(appContext) }
+        }
         ttsManager.speak("어떤 서비스를 이용하시겠습니까?")
         ttsManager.speakQueued("오른쪽 스와이프를 통해 기능을 선택하세요.")
         ttsManager.speakQueued("두 번 터치로 기능을 확정하세요.")
