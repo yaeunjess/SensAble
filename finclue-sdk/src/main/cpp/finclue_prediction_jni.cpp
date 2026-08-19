@@ -14,6 +14,8 @@ namespace {
 std::mutex runtime_mutex;
 llama_model * model = nullptr;
 llama_context * context = nullptr;
+constexpr int32_t MAX_PARALLEL_CANDIDATES = 6;
+constexpr int32_t MAX_SKIPPED_INITIAL_TOKENS = 8;
 
 void throw_illegal_state(JNIEnv * env, const char * message) {
     const jclass type = env->FindClass("java/lang/IllegalStateException");
@@ -149,34 +151,141 @@ std::string token_piece(const llama_vocab * vocab, llama_token token) {
     return std::string(buffer.data(), static_cast<size_t>(count));
 }
 
-std::string generate_candidate_from_cached_prompt(
-        const std::string & prefix,
-        int32_t max_tokens,
-        uint32_t seed) {
-    const llama_vocab * vocab = llama_model_get_vocab(model);
-    auto sampler_params = llama_sampler_chain_default_params();
-    sampler_params.no_perf = true;
-    llama_sampler * sampler = llama_sampler_chain_init(sampler_params);
-    llama_sampler_chain_add(sampler, llama_sampler_init_top_k(40));
-    llama_sampler_chain_add(sampler, llama_sampler_init_top_p(0.90f, 1));
-    llama_sampler_chain_add(sampler, llama_sampler_init_temp(0.75f));
-    llama_sampler_chain_add(sampler, llama_sampler_init_dist(seed));
-
-    std::string result = prefix;
-    for (int32_t index = 0; index < max_tokens; ++index) {
-        const llama_token token = llama_sampler_sample(sampler, context, -1);
-        if (llama_vocab_is_eog(vocab, token)) break;
-        const std::string piece = token_piece(vocab, token);
-        if (piece.find('\n') != std::string::npos || piece.find('\r') != std::string::npos) break;
-        result += piece;
-        llama_token mutable_token = token;
-        if (llama_decode(context, llama_batch_get_one(&mutable_token, 1)) != 0) {
-            llama_sampler_free(sampler);
-            throw std::runtime_error("Generated token decode failed.");
-        }
+std::vector<llama_token> highest_probability_tokens(
+        const float * logits,
+        const llama_vocab * vocab,
+        int32_t count) {
+    const int32_t vocabulary_size = llama_vocab_n_tokens(vocab);
+    std::vector<llama_token> tokens(static_cast<size_t>(vocabulary_size));
+    for (int32_t index = 0; index < vocabulary_size; ++index) {
+        tokens[static_cast<size_t>(index)] = index;
     }
-    llama_sampler_free(sampler);
+    const auto compare = [logits](llama_token left, llama_token right) {
+        return logits[left] > logits[right];
+    };
+    const size_t inspected = std::min(
+            tokens.size(),
+            static_cast<size_t>(count + MAX_SKIPPED_INITIAL_TOKENS));
+    std::partial_sort(tokens.begin(), tokens.begin() + inspected, tokens.end(), compare);
+
+    std::vector<llama_token> result;
+    result.reserve(static_cast<size_t>(count));
+    for (size_t index = 0; index < inspected && result.size() < static_cast<size_t>(count); ++index) {
+        const llama_token token = tokens[index];
+        if (!llama_vocab_is_eog(vocab, token)) result.push_back(token);
+    }
     return result;
+}
+
+llama_token highest_probability_token(const float * logits, const llama_vocab * vocab) {
+    return highest_probability_tokens(logits, vocab, 1).front();
+}
+
+void clear_batch(llama_batch & batch) {
+    batch.n_tokens = 0;
+}
+
+void add_batch_token(
+        llama_batch & batch,
+        llama_token token,
+        llama_pos position,
+        llama_seq_id sequence,
+        bool request_logits) {
+    const int32_t index = batch.n_tokens;
+    batch.token[index] = token;
+    batch.pos[index] = position;
+    batch.n_seq_id[index] = 1;
+    batch.seq_id[index][0] = sequence;
+    batch.logits[index] = request_logits ? 1 : 0;
+    ++batch.n_tokens;
+}
+
+std::vector<std::string> generate_parallel_candidates(
+        const std::vector<llama_token> & prompt_tokens,
+        const std::string & prefix,
+        int32_t candidate_count,
+        int32_t max_tokens) {
+    const llama_vocab * vocab = llama_model_get_vocab(model);
+    llama_memory_t memory = llama_get_memory(context);
+    llama_memory_clear(memory, true);
+    if (llama_decode(context, llama_batch_get_one(
+            const_cast<llama_token *>(prompt_tokens.data()),
+            static_cast<int32_t>(prompt_tokens.size()))) != 0) {
+        throw std::runtime_error("Generation prompt decode failed.");
+    }
+
+    const float * prompt_logits = llama_get_logits_ith(context, -1);
+    if (prompt_logits == nullptr) throw std::runtime_error("Generation prompt returned no logits.");
+    const auto first_tokens = highest_probability_tokens(prompt_logits, vocab, candidate_count);
+    if (first_tokens.empty()) return {};
+
+    const int32_t beam_count = static_cast<int32_t>(first_tokens.size());
+    for (int32_t sequence = 1; sequence < beam_count; ++sequence) {
+        llama_memory_seq_cp(memory, 0, sequence, -1, -1);
+    }
+
+    llama_batch batch = llama_batch_init(beam_count, 0, 1);
+    std::vector<std::string> results(static_cast<size_t>(beam_count), prefix);
+    std::vector<int32_t> logit_rows(static_cast<size_t>(beam_count), -1);
+    std::vector<bool> active(static_cast<size_t>(beam_count), true);
+    try {
+        for (int32_t sequence = 0; sequence < beam_count; ++sequence) {
+            const llama_token token = first_tokens[static_cast<size_t>(sequence)];
+            const std::string piece = token_piece(vocab, token);
+            if (piece.find('\n') != std::string::npos || piece.find('\r') != std::string::npos) {
+                active[static_cast<size_t>(sequence)] = false;
+                continue;
+            }
+            results[static_cast<size_t>(sequence)] += piece;
+            logit_rows[static_cast<size_t>(sequence)] = batch.n_tokens;
+            add_batch_token(
+                    batch,
+                    token,
+                    static_cast<llama_pos>(prompt_tokens.size()),
+                    sequence,
+                    true);
+        }
+        if (batch.n_tokens > 0 && llama_decode(context, batch) != 0) {
+            throw std::runtime_error("Initial parallel candidate decode failed.");
+        }
+
+        for (int32_t step = 1; step < max_tokens; ++step) {
+            clear_batch(batch);
+            for (int32_t sequence = 0; sequence < beam_count; ++sequence) {
+                if (!active[static_cast<size_t>(sequence)]) continue;
+                const int32_t row = logit_rows[static_cast<size_t>(sequence)];
+                const float * logits = llama_get_logits_ith(context, row);
+                if (logits == nullptr) throw std::runtime_error("Parallel candidate returned no logits.");
+                const llama_token token = highest_probability_token(logits, vocab);
+                if (llama_vocab_is_eog(vocab, token)) {
+                    active[static_cast<size_t>(sequence)] = false;
+                    continue;
+                }
+                const std::string piece = token_piece(vocab, token);
+                if (piece.find('\n') != std::string::npos || piece.find('\r') != std::string::npos) {
+                    active[static_cast<size_t>(sequence)] = false;
+                    continue;
+                }
+                results[static_cast<size_t>(sequence)] += piece;
+                logit_rows[static_cast<size_t>(sequence)] = batch.n_tokens;
+                add_batch_token(
+                        batch,
+                        token,
+                        static_cast<llama_pos>(prompt_tokens.size() + step),
+                        sequence,
+                        true);
+            }
+            if (batch.n_tokens == 0) break;
+            if (llama_decode(context, batch) != 0) {
+                throw std::runtime_error("Parallel candidate decode failed.");
+            }
+        }
+        llama_batch_free(batch);
+        return results;
+    } catch (...) {
+        llama_batch_free(batch);
+        throw;
+    }
 }
 
 void unload_locked() {
@@ -189,6 +298,7 @@ void unload_locked() {
         model = nullptr;
     }
 }
+
 } // namespace
 
 extern "C" JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM *, void *) {
@@ -230,6 +340,7 @@ Java_com_finclue_sdk_prediction_LlamaNativeRuntime_loadModel(
     context_params.n_ctx = static_cast<uint32_t>(context_size);
     context_params.n_batch = static_cast<uint32_t>(context_size);
     context_params.n_ubatch = static_cast<uint32_t>(context_size);
+    context_params.n_seq_max = MAX_PARALLEL_CANDIDATES;
     context_params.n_threads = thread_count;
     context_params.n_threads_batch = thread_count;
     context_params.no_perf = true;
@@ -288,14 +399,14 @@ Java_com_finclue_sdk_prediction_LlamaNativeRuntime_generateCandidates(
         jstring prefix_text,
         jint candidate_count,
         jint max_tokens,
-        jint seed_offset) {
+        jint) {
     std::lock_guard<std::mutex> lock(runtime_mutex);
     if (model == nullptr || context == nullptr) {
         throw_illegal_state(env, "Prediction model is not loaded.");
         return nullptr;
     }
-    if (candidate_count <= 0 || candidate_count > 32 || max_tokens <= 0 || max_tokens > 32 ||
-        seed_offset < 0 || seed_offset > 1024) {
+    if (candidate_count <= 0 || candidate_count > MAX_PARALLEL_CANDIDATES ||
+        max_tokens <= 0 || max_tokens > 32) {
         throw_illegal_state(env, "Invalid generation limits.");
         return nullptr;
     }
@@ -307,32 +418,16 @@ Java_com_finclue_sdk_prediction_LlamaNativeRuntime_generateCandidates(
         const auto prompt_tokens = tokenize(vocab, conditioning + prefix);
         if (prompt_tokens.empty()) throw std::runtime_error("Generation prompt is empty.");
 
-        // Keep every common prompt token except the final one in the KV cache. Re-decoding only
-        // that final token restores the same next-token logits for each independently sampled
-        // candidate without evaluating the full instruction repeatedly.
-        llama_memory_t memory = llama_get_memory(context);
-        llama_memory_clear(memory, true);
-        const int32_t cached_token_count = static_cast<int32_t>(prompt_tokens.size()) - 1;
-        if (cached_token_count > 0 && llama_decode(context, llama_batch_get_one(
-                const_cast<llama_token *>(prompt_tokens.data()), cached_token_count)) != 0) {
-            throw std::runtime_error("Generation prompt cache decode failed.");
-        }
-
-        const jclass string_class = env->FindClass("java/lang/String");
-        jobjectArray result = env->NewObjectArray(candidate_count, string_class, nullptr);
-        for (jint index = 0; index < candidate_count; ++index) {
-            if (!llama_memory_seq_rm(memory, 0, cached_token_count, -1)) {
-                throw std::runtime_error("Could not restore generation prompt cache.");
-            }
-            llama_token final_prompt_token = prompt_tokens.back();
-            if (llama_decode(context, llama_batch_get_one(&final_prompt_token, 1)) != 0) {
-                throw std::runtime_error("Generation prompt final-token decode failed.");
-            }
-            const std::string candidate = generate_candidate_from_cached_prompt(
+        const auto candidates = generate_parallel_candidates(
+                prompt_tokens,
                 prefix,
-                max_tokens,
-                0xF1C1u + static_cast<uint32_t>(seed_offset + index) * 7919u);
-            jstring value = to_java_string(env, candidate);
+                candidate_count,
+                max_tokens);
+        const jclass string_class = env->FindClass("java/lang/String");
+        jobjectArray result = env->NewObjectArray(
+                static_cast<jsize>(candidates.size()), string_class, nullptr);
+        for (size_t index = 0; index < candidates.size(); ++index) {
+            jstring value = to_java_string(env, candidates[index]);
             env->SetObjectArrayElement(result, index, value);
             env->DeleteLocalRef(value);
         }

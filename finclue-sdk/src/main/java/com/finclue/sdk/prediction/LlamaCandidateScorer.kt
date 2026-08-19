@@ -40,29 +40,18 @@ internal class LlamaCandidateScorer(context: Context) {
         if (prefix.isBlank() || count <= 0) return@withLock emptyList()
         ensureLoaded()
         val accepted = linkedSetOf<String>()
-        suspend fun generateBatch(candidateCount: Int, seedOffset: Int) {
-            val generated = withContext(Dispatchers.Default) {
-                LlamaNativeRuntime.generateCandidates(
-                    conditioningText = predictionContext.conditioningText(),
-                    prefix = prefix,
-                    candidateCount = candidateCount,
-                    maxTokens = predictionContext.maxGeneratedTokens,
-                    seedOffset = seedOffset,
-                )
-            }
-            generated.asSequence()
-                .flatMap { GeneratedCandidateValidator.validate(predictionContext, prefix, it) }
-                .forEach(accepted::add)
-        }
-
-        val initialAttempts = count.coerceAtMost(INITIAL_GENERATION_ATTEMPTS)
-        generateBatch(initialAttempts, seedOffset = 0)
-        if (accepted.size < count && initialAttempts < MAX_GENERATION_ATTEMPTS) {
-            generateBatch(
-                candidateCount = MAX_GENERATION_ATTEMPTS - initialAttempts,
-                seedOffset = initialAttempts,
+        val generated = withContext(Dispatchers.Default) {
+            LlamaNativeRuntime.generateCandidates(
+                conditioningText = predictionContext.conditioningText(),
+                prefix = prefix,
+                candidateCount = PARALLEL_CANDIDATE_COUNT,
+                maxTokens = predictionContext.maxGeneratedTokens,
+                seedOffset = 0,
             )
         }
+        generated.asSequence()
+            .flatMap { GeneratedCandidateValidator.validate(predictionContext, prefix, it) }
+            .forEach(accepted::add)
         accepted.take(count)
     }
 
@@ -114,8 +103,7 @@ internal class LlamaCandidateScorer(context: Context) {
         const val CONTEXT_SIZE = 256
         const val MAX_PERSON_NAME_GENERATED_TOKENS = 6
         const val MAX_GENERAL_GENERATED_TOKENS = 8
-        const val INITIAL_GENERATION_ATTEMPTS = 6
-        const val MAX_GENERATION_ATTEMPTS = 12
+        const val PARALLEL_CANDIDATE_COUNT = 6
     }
 }
 
