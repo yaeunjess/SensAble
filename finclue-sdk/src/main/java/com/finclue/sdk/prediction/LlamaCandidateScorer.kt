@@ -24,7 +24,7 @@ internal class LlamaCandidateScorer(context: Context) {
 
         val scores = withContext(Dispatchers.Default) {
             LlamaNativeRuntime.scoreCandidates(
-                conditioningText = predictionContext.conditioningText(),
+                conditioningText = predictionContext.conditioningText(prefix),
                 candidates = validCandidates.toTypedArray(),
             )
         }
@@ -42,7 +42,7 @@ internal class LlamaCandidateScorer(context: Context) {
         val accepted = linkedSetOf<String>()
         val generated = withContext(Dispatchers.Default) {
             LlamaNativeRuntime.generateCandidates(
-                conditioningText = predictionContext.conditioningText(),
+                conditioningText = predictionContext.conditioningText(prefix),
                 prefix = prefix,
                 candidateCount = PARALLEL_CANDIDATE_COUNT,
                 maxTokens = predictionContext.maxGeneratedTokens,
@@ -72,22 +72,55 @@ internal class LlamaCandidateScorer(context: Context) {
         loaded = true
     }
 
-    private fun PredictionContext.conditioningText(): String {
-        val typeLabel = when (this) {
-            PredictionContext.GENERAL -> "일반 텍스트"
-            PredictionContext.BANK_NAME -> "은행명"
-            PredictionContext.PERSON_NAME -> "한국 사람 이름"
-            PredictionContext.ORGANIZATION_NAME -> "기관명"
-            PredictionContext.ADDRESS -> "대한민국 주소"
-            PredictionContext.PRODUCT_NAME -> "상품명"
+    private fun PredictionContext.conditioningText(prefix: String): String {
+        val profile = when (this) {
+            PredictionContext.GENERAL -> PromptProfile(
+                role = "자연스러운 한국어 문장을 이어 쓰는 자동완성기입니다. assistant 응답에는 현재 입력이 이미 적혀 있습니다. 입력을 반복하거나 설명하지 말고 문장의 나머지만 이어서 생성합니다.",
+                examplePrefix = "안녕",
+                exampleCompletion = "안녕하세요.",
+                request = "자연스러운 일반 한국어 문장으로 완성하세요.",
+            )
+            PredictionContext.BANK_NAME -> PromptProfile(
+                role = "대한민국 은행 이름 자동완성기입니다. assistant 응답에는 현재 입력이 이미 적혀 있습니다. 조사나 설명 없이 은행 이름의 남은 글자만 이어서 생성합니다.",
+                examplePrefix = "신한",
+                exampleCompletion = "신한은행",
+                request = "대한민국 은행 이름 하나로 완성하세요.",
+            )
+            PredictionContext.PERSON_NAME -> PromptProfile(
+                role = "한국 사람 이름 자동완성기입니다. assistant 응답에는 현재 입력이 이미 적혀 있습니다. 오직 이름을 완성할 한글 한두 글자만 이어서 생성합니다. 조사나 문장을 만들지 않습니다.",
+                examplePrefix = "김민",
+                exampleCompletion = "김민준",
+                request = "2~4글자의 한국 사람 이름으로 완성하세요.",
+            )
+            PredictionContext.ORGANIZATION_NAME -> PromptProfile(
+                role = "대한민국 기관과 단체 이름 자동완성기입니다. assistant 응답에는 현재 입력이 이미 적혀 있습니다. 설명 없이 기관명의 남은 부분만 이어서 생성합니다.",
+                examplePrefix = "한국관광",
+                exampleCompletion = "한국관광공사",
+                request = "대한민국 기관 또는 단체 이름 하나로 완성하세요.",
+            )
+            PredictionContext.ADDRESS -> PromptProfile(
+                role = "대한민국 주소 자동완성기입니다. assistant 응답에는 현재 입력이 이미 적혀 있습니다. 설명이나 문장 없이 주소의 남은 부분만 이어서 생성합니다.",
+                examplePrefix = "부산 해운대",
+                exampleCompletion = "부산 해운대구",
+                request = "대한민국 주소 하나로 자연스럽게 완성하세요.",
+            )
+            PredictionContext.PRODUCT_NAME -> PromptProfile(
+                role = "한국어 금융 상품 이름 자동완성기입니다. assistant 응답에는 현재 입력이 이미 적혀 있습니다. 설명 없이 상품명의 남은 부분만 이어서 생성합니다.",
+                examplePrefix = "청년",
+                exampleCompletion = "청년적금",
+                request = "금융 상품 이름 하나로 완성하세요.",
+            )
         }
         return buildString {
             append("<|im_start|>system\n")
-            append("당신은 한국어 자동완성 엔진입니다. assistant 응답의 시작 부분은 이미 입력되어 있습니다. ")
-            append("입력된 부분을 반복하거나 설명하지 말고, 바로 뒤에 이어질 글자만 생성합니다.")
+            append(profile.role)
             append("<|im_end|>\n<|im_start|>user\n")
-            append("입력 유형: ").append(typeLabel).append('\n')
-            append("현재 입력을 자연스럽게 완성하세요.")
+            append("현재 입력: ").append(profile.examplePrefix)
+            append("<|im_end|>\n<|im_start|>assistant\n")
+            append(profile.exampleCompletion)
+            append("<|im_end|>\n<|im_start|>user\n")
+            append("현재 입력: ").append(prefix).append('\n')
+            append(profile.request)
             append("<|im_end|>\n<|im_start|>assistant\n")
         }
     }
@@ -106,6 +139,13 @@ internal class LlamaCandidateScorer(context: Context) {
         const val PARALLEL_CANDIDATE_COUNT = 6
     }
 }
+
+private data class PromptProfile(
+    val role: String,
+    val examplePrefix: String,
+    val exampleCompletion: String,
+    val request: String,
+)
 
 internal object GeneratedCandidateValidator {
     private val personNameSeparator = Regex("[,;:/|\\r\\n]+")
