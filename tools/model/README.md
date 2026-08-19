@@ -27,7 +27,7 @@ machine. Runtime inference in the Android SDK will remain fully offline.
 ## AAR packaging
 
 The release model is stored at
-`finclue-sdk/src/main/assets/finclue/prediction/model/polyglot-ko-1.3b-q4_k_m.gguf`
+`finclue-sdk/src/main/assets/finclue/prediction/model/hyperclovax-seed-text-instruct-0.5b-q4_k_m.gguf`
 and tracked with Git LFS. At first prediction use, the SDK verifies and copies the model to
 the app-private `filesDir/finclue/prediction/model` directory. llama.cpp then memory-maps that
 real file path. Later uses skip the copy when the recorded model version, size, and SHA-256 match.

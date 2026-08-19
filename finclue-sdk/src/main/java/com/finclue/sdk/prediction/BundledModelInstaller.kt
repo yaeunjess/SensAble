@@ -51,9 +51,9 @@ internal class BundledModelInstaller(context: Context) {
     private fun File.readTextOrNull(): String? = runCatching { readText() }.getOrNull()
 
     private companion object {
-        const val MODEL_FILE_NAME = "exaone-4.0-1.2b-q4_k_m.gguf"
+        const val MODEL_FILE_NAME = "hyperclovax-seed-text-instruct-0.5b-q4_k_m.gguf"
         const val MODEL_ASSET_PATH = "finclue/prediction/model/$MODEL_FILE_NAME"
-        const val MODEL_SIZE = 812_437_792L
-        const val MODEL_SHA256 = "7b5e753540183ae4d56e6febd9b48cdd944de53386e6faa8f51c8f98cb2b47df"
+        const val MODEL_SIZE = 368_181_888L
+        const val MODEL_SHA256 = "35ecde39f3b1b50cc7f1305e50f00787963782b415611ff719d17bcb55df2bb4"
     }
 }

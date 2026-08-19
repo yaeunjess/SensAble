@@ -1,15 +1,15 @@
 {
-  "modelId": "LGAI-EXAONE/EXAONE-4.0-1.2B-GGUF",
-  "sourceRevision": "162446400ea4596377a3ce1d3ddffa32971af0a6",
+  "modelId": "naver-hyperclovax/HyperCLOVAX-SEED-Text-Instruct-0.5B",
+  "sourceRevision": "3da5046fb0195d14f2497de198136987d35fd644",
   "runtime": "llama.cpp",
   "converterRevision": "169e4a7ff201e666c2325bcd35afb64573e39d09",
   "format": "GGUF V3",
   "quantization": "Q4_K_M",
-  "fileName": "exaone-4.0-1.2b-q4_k_m.gguf",
-  "fileSizeBytes": 812437792,
-  "sha256": "7B5E753540183AE4D56E6FEBD9B48CDD944DE53386E6FAA8F51C8F98CB2B47DF",
-  "license": "EXAONE AI Model License Agreement 1.2 - NC",
-  "contextLength": 32768,
+  "fileName": "hyperclovax-seed-text-instruct-0.5b-q4_k_m.gguf",
+  "fileSizeBytes": 368181888,
+  "sha256": "35ECDE39F3B1B50CC7F1305E50F00787963782B415611FF719D17BCB55DF2BB4",
+  "license": "HyperCLOVA X SEED Model License Agreement",
+  "contextLength": 8192,
   "mvpContextLength": 256,
-  "notes": "Experimental Korean-English on-device instruction model. Commercial deployment requires a separate license agreement with LG AI Research."
+  "notes": "Experimental Korean-focused instruction model converted from BF16 to GGUF F16 and quantized to Q4_K_M for Android arm64 inference."
 }

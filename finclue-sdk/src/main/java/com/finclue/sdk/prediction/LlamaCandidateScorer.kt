@@ -93,12 +93,13 @@ internal class LlamaCandidateScorer(context: Context) {
             PredictionContext.PRODUCT_NAME -> "상품명"
         }
         return buildString {
-            append("[|system|]\n")
-            append("당신은 한국어 자동완성 엔진입니다. 설명 없이 요청한 유형의 완성 결과 하나만 출력합니다.")
-            append("[|endofturn|]\n[|user|]\n")
+            append("<|im_start|>system\n")
+            append("당신은 한국어 자동완성 엔진입니다. assistant 응답의 시작 부분은 이미 입력되어 있습니다. ")
+            append("입력된 부분을 반복하거나 설명하지 말고, 바로 뒤에 이어질 글자만 생성합니다.")
+            append("<|im_end|>\n<|im_start|>user\n")
             append("입력 유형: ").append(typeLabel).append('\n')
-            append("사용자가 입력한 글자로 시작하는 자연스러운 완성 결과 하나를 출력하세요.")
-            append("[|endofturn|]\n[|assistant|]\n<think>\n\n</think>\n\n")
+            append("현재 입력을 자연스럽게 완성하세요.")
+            append("<|im_end|>\n<|im_start|>assistant\n")
         }
     }
 
