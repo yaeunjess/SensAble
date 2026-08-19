@@ -114,8 +114,8 @@ internal class LlamaCandidateScorer(context: Context) {
         const val CONTEXT_SIZE = 256
         const val MAX_PERSON_NAME_GENERATED_TOKENS = 6
         const val MAX_GENERAL_GENERATED_TOKENS = 8
-        const val INITIAL_GENERATION_ATTEMPTS = 3
-        const val MAX_GENERATION_ATTEMPTS = 6
+        const val INITIAL_GENERATION_ATTEMPTS = 6
+        const val MAX_GENERATION_ATTEMPTS = 12
     }
 }
 

@@ -29,6 +29,63 @@ std::string to_string(JNIEnv * env, jstring value) {
     return result;
 }
 
+jstring to_java_string(JNIEnv * env, const std::string & utf8) {
+    std::vector<jchar> utf16;
+    utf16.reserve(utf8.size());
+    for (size_t index = 0; index < utf8.size();) {
+        const auto first = static_cast<unsigned char>(utf8[index]);
+        uint32_t code_point = 0;
+        size_t length = 0;
+        uint32_t minimum = 0;
+        if (first < 0x80) {
+            code_point = first;
+            length = 1;
+        } else if ((first & 0xE0) == 0xC0) {
+            code_point = first & 0x1F;
+            length = 2;
+            minimum = 0x80;
+        } else if ((first & 0xF0) == 0xE0) {
+            code_point = first & 0x0F;
+            length = 3;
+            minimum = 0x800;
+        } else if ((first & 0xF8) == 0xF0) {
+            code_point = first & 0x07;
+            length = 4;
+            minimum = 0x10000;
+        } else {
+            utf16.push_back(0xFFFD);
+            ++index;
+            continue;
+        }
+
+        bool valid = index + length <= utf8.size();
+        for (size_t offset = 1; valid && offset < length; ++offset) {
+            const auto continuation = static_cast<unsigned char>(utf8[index + offset]);
+            if ((continuation & 0xC0) != 0x80) {
+                valid = false;
+            } else {
+                code_point = (code_point << 6) | (continuation & 0x3F);
+            }
+        }
+        valid = valid && code_point >= minimum && code_point <= 0x10FFFF &&
+                !(code_point >= 0xD800 && code_point <= 0xDFFF);
+        if (!valid) {
+            utf16.push_back(0xFFFD);
+            ++index;
+            continue;
+        }
+        index += length;
+        if (code_point <= 0xFFFF) {
+            utf16.push_back(static_cast<jchar>(code_point));
+        } else {
+            code_point -= 0x10000;
+            utf16.push_back(static_cast<jchar>(0xD800 + (code_point >> 10)));
+            utf16.push_back(static_cast<jchar>(0xDC00 + (code_point & 0x3FF)));
+        }
+    }
+    return env->NewString(utf16.data(), static_cast<jsize>(utf16.size()));
+}
+
 std::vector<llama_token> tokenize(const llama_vocab * vocab, const std::string & text) {
     int32_t count = llama_tokenize(vocab, text.data(), static_cast<int32_t>(text.size()),
                                    nullptr, 0, true, true);
@@ -275,7 +332,7 @@ Java_com_finclue_sdk_prediction_LlamaNativeRuntime_generateCandidates(
                 prefix,
                 max_tokens,
                 0xF1C1u + static_cast<uint32_t>(seed_offset + index) * 7919u);
-            jstring value = env->NewStringUTF(candidate.c_str());
+            jstring value = to_java_string(env, candidate);
             env->SetObjectArrayElement(result, index, value);
             env->DeleteLocalRef(value);
         }
