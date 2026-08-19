@@ -1,6 +1,7 @@
 package com.sensable.app.feature.braille.viewmodel
 
 import android.content.Context
+import android.util.Log
 import androidx.lifecycle.viewModelScope
 import com.finclue.sdk.Finclue
 import com.finclue.sdk.api.HistoryPolicy
@@ -35,7 +36,9 @@ class BrailleViewModel @Inject constructor(
 
     init {
         viewModelScope.launch {
-            runCatching { Finclue.prewarmPredictions(appContext) }
+            runCatching { Finclue.checkGeminiNanoAvailability() }
+                .onSuccess { Log.i("FinclueAICore", "Gemini Nano status=$it") }
+                .onFailure { Log.e("FinclueAICore", "Gemini Nano status check failed", it) }
         }
         ttsManager.speak("어떤 서비스를 이용하시겠습니까?")
         ttsManager.speakQueued("오른쪽 스와이프를 통해 기능을 선택하세요.")

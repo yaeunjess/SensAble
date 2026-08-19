@@ -8,6 +8,7 @@ import com.finclue.sdk.storage.LocalDataStore
 import com.finclue.sdk.storage.LocalDataSummary
 import com.finclue.sdk.api.FlowResult
 import com.finclue.sdk.api.FlowSpec
+import com.finclue.sdk.api.GeminiNanoAvailability
 import com.finclue.sdk.api.PredictionCandidate
 import com.finclue.sdk.api.PredictionRequest
 import com.finclue.sdk.api.PredictionSelection
@@ -15,6 +16,8 @@ import com.finclue.sdk.internal.FinclueFlowActivity
 import com.finclue.sdk.internal.PendingFlow
 import com.finclue.sdk.internal.PendingFlowStore
 import com.finclue.sdk.prediction.PredictionEngine
+import com.google.mlkit.genai.common.FeatureStatus
+import com.google.mlkit.genai.prompt.Generation
 
 /** Stable public entry point for host applications. */
 object Finclue {
@@ -66,6 +69,16 @@ object Finclue {
     suspend fun prewarmPredictions(context: Context) {
         engine(context).prewarm()
     }
+
+    /** Checks whether Android AICore can provide Gemini Nano on this device. */
+    @JvmStatic
+    suspend fun checkGeminiNanoAvailability(): GeminiNanoAvailability =
+        when (Generation.getClient().checkStatus()) {
+            FeatureStatus.AVAILABLE -> GeminiNanoAvailability.AVAILABLE
+            FeatureStatus.DOWNLOADABLE -> GeminiNanoAvailability.DOWNLOADABLE
+            FeatureStatus.DOWNLOADING -> GeminiNanoAvailability.DOWNLOADING
+            else -> GeminiNanoAvailability.UNAVAILABLE
+        }
 
     /** Returns matching personal history without loading or running the language model. */
     @JvmStatic

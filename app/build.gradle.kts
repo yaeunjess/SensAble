@@ -12,7 +12,7 @@ android {
 
     defaultConfig {
         applicationId = "com.sensable.app"
-        minSdk = 24
+        minSdk = 26
         targetSdk = 35
         versionCode = 1
         versionName = "1.0"
@@ -47,6 +47,7 @@ dependencies {
     // Local AARs do not carry Maven metadata, so runtime dependencies are declared by the host.
     implementation(libs.androidx.room.runtime)
     implementation(libs.androidx.room.ktx)
+    implementation(libs.mlkit.genai.prompt)
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.activity.compose)

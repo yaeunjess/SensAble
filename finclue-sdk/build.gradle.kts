@@ -10,7 +10,7 @@ android {
     ndkVersion = "27.3.13750724"
 
     defaultConfig {
-        minSdk = 24
+        minSdk = 26
         ndk {
             abiFilters += "arm64-v8a"
         }
@@ -61,6 +61,7 @@ dependencies {
     implementation(libs.androidx.room.runtime)
     implementation(libs.androidx.room.ktx)
     implementation(libs.kotlinx.coroutines.android)
+    implementation(libs.mlkit.genai.prompt)
     ksp(libs.androidx.room.compiler)
     testImplementation(libs.junit)
 }
