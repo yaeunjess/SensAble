@@ -99,22 +99,16 @@ internal class PredictionEngine(context: Context) {
             limit.coerceAtMost(GENERATED_CANDIDATE_LIMIT),
         )
         val generationMillis = SystemClock.elapsedRealtime() - generationStartedAt
-        val scoringStartedAt = SystemClock.elapsedRealtime()
-        val scored = scorer.score(
-            predictionContext,
-            prefix,
-            (generated + personal.map(PersonalCandidate::text)).distinct(),
-        )
-        val scoringMillis = SystemClock.elapsedRealtime() - scoringStartedAt
-        val rescoredOrder = scored.sortedByDescending(LmCandidate::logProbability)
-            .map { candidate -> generated.indexOf(candidate.text) }
+        val generatedInModelOrder = generated.mapIndexed { index, text ->
+            LmCandidate(text = text, logProbability = -index.toFloat())
+        }
         Log.i(
             TAG,
             "prediction timing context=${predictionContext.storageKey} " +
                 "generated=${generated.size} generationMs=$generationMillis " +
-                "scored=${scored.size} scoringMs=$scoringMillis rescoredOrder=$rescoredOrder",
+                "rescoring=disabled",
         )
-        return ranker.rank(CandidateMerger.merge(scored, personal), limit)
+        return ranker.rank(CandidateMerger.merge(generatedInModelOrder, personal), limit)
             .also { resultCache[cacheKey] = it }
     }
 
