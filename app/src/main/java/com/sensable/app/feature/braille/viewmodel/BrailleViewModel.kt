@@ -46,11 +46,11 @@ class BrailleViewModel @Inject constructor(
     private fun toggleDot(dot: Int) {
         val current = _uiState.value.currentCellDots
         if (dot in current) {
-            ttsManager.speak("${dot}번 취소")
             _uiState.update { it.copy(currentCellDots = current - dot) }
+            ttsManager.speak("${dot}번 취소")
         } else {
-            ttsManager.speak("${dot}번")
             _uiState.update { it.copy(currentCellDots = current + dot) }
+            ttsManager.speak("${dot}번")
         }
     }
 

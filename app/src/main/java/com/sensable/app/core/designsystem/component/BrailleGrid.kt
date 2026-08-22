@@ -58,10 +58,10 @@ private fun vibrateTap(context: Context) {
         context.getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
     }
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-        vibrator.vibrate(VibrationEffect.createOneShot(80L, 200))
+        vibrator.vibrate(VibrationEffect.createOneShot(40L, 255))
     } else {
         @Suppress("DEPRECATION")
-        vibrator.vibrate(80L)
+        vibrator.vibrate(40L)
     }
 }
 
