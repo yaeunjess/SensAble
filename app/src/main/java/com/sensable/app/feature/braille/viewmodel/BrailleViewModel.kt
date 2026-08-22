@@ -1,6 +1,7 @@
 package com.sensable.app.feature.braille.viewmodel
 
 import android.content.Context
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.finclue.sdk.Finclue
@@ -172,13 +173,18 @@ class BrailleViewModel @Inject constructor(
             val generated = runCatching {
                 Finclue.requestPredictions(appContext, request).map { it.text }
             }.getOrElse {
-                ttsManager.speak("추천을 불러오지 못했습니다. 입력은 계속할 수 있습니다")
+                Log.e(TAG, "Failed to generate AI name recommendations", it)
                 emptyList()
             }
             if (_uiState.value.mode != BrailleMode.AI_RECOMMENDATION) return@launch
             val suggestions = (personal + generated).distinct().take(3)
             _uiState.update {
                 it.copy(
+                    mode = if (suggestions.isEmpty()) {
+                        BrailleMode.TRANSFER_RECIPIENT
+                    } else {
+                        BrailleMode.AI_RECOMMENDATION
+                    },
                     isPredictionLoading = false,
                     correctionSuggestions = suggestions,
                     currentSuggestionIndex = -1,
@@ -188,7 +194,7 @@ class BrailleViewModel @Inject constructor(
                 )
             }
             if (suggestions.isEmpty()) {
-                ttsManager.speak("일치하는 이름을 찾지 못했습니다")
+                ttsManager.speak("일치하는 이름을 찾지 못했습니다. 이름 입력으로 돌아갑니다")
             } else {
                 speakNextSuggestion()
             }
@@ -223,7 +229,7 @@ class BrailleViewModel @Inject constructor(
                     ttsManager.speak("받는 사람 이름을 입력해 주세요")
                     return
                 }
-                beginAccountEntry(recipient)
+                recordRecipientAndBeginAccountEntry(recipient)
             }
             BrailleMode.AI_RECOMMENDATION -> {
                 val recipient = state.autocompleteSuggestion
@@ -231,19 +237,7 @@ class BrailleViewModel @Inject constructor(
                     ttsManager.speak("추천 이름을 먼저 선택해 주세요")
                     return
                 }
-                viewModelScope.launch {
-                    runCatching {
-                        Finclue.recordPredictionSelection(
-                            appContext,
-                            PredictionSelection(
-                                text = recipient,
-                                context = PredictionContext.PERSON_NAME,
-                                historyPolicy = HistoryPolicy.READ_WRITE,
-                            )
-                        )
-                    }
-                }
-                beginAccountEntry(recipient)
+                recordRecipientAndBeginAccountEntry(recipient)
             }
             BrailleMode.TRANSFER_ACCOUNT -> {
                 if (state.inputText.isBlank()) {
@@ -278,6 +272,24 @@ class BrailleViewModel @Inject constructor(
                 guideMessage = "계좌번호를 입력하세요",
                 recipientName = recipient,
             )
+        }
+    }
+
+    private fun recordRecipientAndBeginAccountEntry(recipient: String) {
+        viewModelScope.launch {
+            runCatching {
+                Finclue.recordPredictionSelection(
+                    appContext,
+                    PredictionSelection(
+                        text = recipient,
+                        context = PredictionContext.PERSON_NAME,
+                        historyPolicy = HistoryPolicy.READ_WRITE,
+                    )
+                )
+            }.onFailure {
+                Log.e(TAG, "Failed to record recipient selection: $recipient", it)
+            }
+            beginAccountEntry(recipient)
         }
     }
 
@@ -346,6 +358,10 @@ class BrailleViewModel @Inject constructor(
 
     fun reset() {
         _uiState.update { BrailleUiState() }
+    }
+
+    private companion object {
+        const val TAG = "BrailleViewModel"
     }
 }
 
