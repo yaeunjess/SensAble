@@ -37,9 +37,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.pointerInteropFilter
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.clearAndSetSemantics
-import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -130,25 +128,9 @@ fun BrailleGrid(
     fun dotAt(x: Float, y: Float): Int? {
         if (hover.size.width <= 0f || hover.size.height <= 0f) return null
         if (x < 0f || x >= hover.size.width || y < 0f || y >= hover.size.height) return null
-        val actionAreaHeight = 72f * context.resources.displayMetrics.density
-        val dotAreaHeight = hover.size.height - actionAreaHeight
-        if (dotAreaHeight <= 0f || y >= dotAreaHeight) return null
         val column = if (x < hover.size.width / 2f) 0 else 1
-        val row = ((y / dotAreaHeight) * 3).toInt().coerceIn(0, 2)
+        val row = ((y / hover.size.height) * 3).toInt().coerceIn(0, 2)
         return row + (1 - column) * 3 + 1
-    }
-
-    fun actionRowAt(x: Float, y: Float): Int? {
-        if (hover.size.width <= 0f || hover.size.height <= 0f) return null
-        if (x < 0f || x >= hover.size.width || y < 0f || y >= hover.size.height) return null
-        val actionHeight = 64f * context.resources.displayMetrics.density
-        if (y < hover.size.height - actionHeight) return null
-        val horizontalRatio = x / hover.size.width
-        return when {
-            horizontalRatio < 0.25f -> 0
-            horizontalRatio < 0.75f -> 1
-            else -> 2
-        }
     }
 
     fun runCenterAction(row: Int) {
@@ -160,50 +142,20 @@ fun BrailleGrid(
         }
     }
 
-    var columnModifier = modifier
+    var dotAreaModifier = Modifier
         .fillMaxWidth()
         .onSizeChanged { hover.size = Size(it.width.toFloat(), it.height.toFloat()) }
         .then(
             if (touchExplorationEnabled) {
                 Modifier
-                    .clearAndSetSemantics {
-                        customActions = buildList {
-                            add(
-                            CustomAccessibilityAction("선택한 점자 입력") {
-                                vibrateTap(context)
-                                onSwipeRight()
-                                true
-                            })
-                            add(
-                            CustomAccessibilityAction("삭제") {
-                                vibrateTap(context)
-                                onSwipeLeft?.invoke()
-                                true
-                            })
-                            onAiCorrection?.let { requestAiCorrection ->
-                                add(
-                                    CustomAccessibilityAction("AI 입력 보정") {
-                                        vibrateTap(context)
-                                        requestAiCorrection()
-                                        true
-                                    }
-                                )
-                            }
-                            add(
-                            CustomAccessibilityAction("전체 입력 완료") {
-                                vibrateTap(context)
-                                onDoubleTap?.invoke()
-                                true
-                            })
-                        }
-                    }
+                    .clearAndSetSemantics { }
                     .pointerInteropFilter { event ->
                         when (event.actionMasked) {
                             MotionEvent.ACTION_HOVER_ENTER -> {
                                 dotAt(event.x, event.y)?.let {
                                     vibrateTap(context)
                                     onButtonClick(it)
-                                } ?: actionRowAt(event.x, event.y)?.let(::runCenterAction)
+                                }
                             }
 
                             MotionEvent.ACTION_HOVER_MOVE,
@@ -238,34 +190,38 @@ fun BrailleGrid(
         }
 
     if (onDoubleTap != null) {
-        columnModifier = columnModifier.pointerInput("doubleTap") {
+        dotAreaModifier = dotAreaModifier.pointerInput("doubleTap") {
             detectTapGestures(onDoubleTap = { onDoubleTap() })
         }
     }
 
     Column(
-        modifier = columnModifier,
+        modifier = modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        repeat(3) { row ->
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                repeat(2) { col ->
-                    val dotNumber = row + (1 - col) * 3 + 1
-                    val isLeftSide = (col == 0)
-                    BrailleButton(
-                        label = "$dotNumber",
-                        isPressed = dotNumber in pressedDots,
-                        isLeftSide = isLeftSide,
-                        onClick = { onButtonClick(dotNumber) },
-                        modifier = Modifier.weight(1f)
-                    )
-                    // 왼쪽 버튼(col=0) 다음에 넓은 중앙 공간 — 더블탭 영역
+        Column(
+            modifier = dotAreaModifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            repeat(3) { row ->
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    repeat(2) { col ->
+                        val dotNumber = row + (1 - col) * 3 + 1
+                        val isLeftSide = (col == 0)
+                        BrailleButton(
+                            label = "$dotNumber",
+                            isPressed = dotNumber in pressedDots,
+                            isLeftSide = isLeftSide,
+                            onClick = { onButtonClick(dotNumber) },
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
                 }
             }
         }
