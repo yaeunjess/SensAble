@@ -7,18 +7,17 @@ import android.os.Vibrator
 import android.os.VibratorManager
 import android.view.MotionEvent
 import android.view.accessibility.AccessibilityManager
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
@@ -38,7 +37,9 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.pointerInteropFilter
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -134,22 +135,25 @@ fun BrailleGrid(
     fun dotAt(x: Float, y: Float): Int? {
         if (hover.size.width <= 0f || hover.size.height <= 0f) return null
         if (x < 0f || x >= hover.size.width || y < 0f || y >= hover.size.height) return null
-        val horizontalRatio = x / hover.size.width
-        val column = when {
-            horizontalRatio < 0.375f -> 0
-            horizontalRatio >= 0.625f -> 1
-            else -> return null
-        }
-        val row = ((y / hover.size.height) * 3).toInt().coerceIn(0, 2)
+        val actionAreaHeight = 72f * context.resources.displayMetrics.density
+        val dotAreaHeight = hover.size.height - actionAreaHeight
+        if (dotAreaHeight <= 0f || y >= dotAreaHeight) return null
+        val column = if (x < hover.size.width / 2f) 0 else 1
+        val row = ((y / dotAreaHeight) * 3).toInt().coerceIn(0, 2)
         return row + (1 - column) * 3 + 1
     }
 
     fun actionRowAt(x: Float, y: Float): Int? {
         if (hover.size.width <= 0f || hover.size.height <= 0f) return null
         if (x < 0f || x >= hover.size.width || y < 0f || y >= hover.size.height) return null
+        val actionHeight = 64f * context.resources.displayMetrics.density
+        if (y < hover.size.height - actionHeight) return null
         val horizontalRatio = x / hover.size.width
-        if (horizontalRatio !in 0.375f..0.625f) return null
-        return ((y / hover.size.height) * 3).toInt().coerceIn(0, 2)
+        return when {
+            horizontalRatio < 0.25f -> 0
+            horizontalRatio < 0.75f -> 1
+            else -> 2
+        }
     }
 
     fun runCenterAction(row: Int) {
@@ -167,7 +171,25 @@ fun BrailleGrid(
         .then(
             if (touchExplorationEnabled) {
                 Modifier
-                    .clearAndSetSemantics { }
+                    .clearAndSetSemantics {
+                        customActions = listOf(
+                            CustomAccessibilityAction("선택한 점자 입력") {
+                                vibrateTap(context)
+                                onSwipeRight()
+                                true
+                            },
+                            CustomAccessibilityAction("삭제") {
+                                vibrateTap(context)
+                                onSwipeLeft?.invoke()
+                                true
+                            },
+                            CustomAccessibilityAction("전체 입력 완료") {
+                                vibrateTap(context)
+                                onDoubleTap?.invoke()
+                                true
+                            }
+                        )
+                    }
                     .pointerInteropFilter { event ->
                         when (event.actionMasked) {
                             MotionEvent.ACTION_HOVER_ENTER -> {
@@ -250,7 +272,8 @@ fun BrailleGrid(
                 modifier = Modifier
                     .fillMaxWidth()
                     .weight(1f),
-                verticalAlignment = Alignment.CenterVertically
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 repeat(2) { col ->
                     val dotNumber = row + (1 - col) * 3 + 1
@@ -260,31 +283,49 @@ fun BrailleGrid(
                         isPressed = dotNumber in pressedDots,
                         isLeftSide = isLeftSide,
                         onClick = { onButtonClick(dotNumber) },
-                        modifier = Modifier.weight(1.5f)
+                        modifier = Modifier.weight(1f)
                     )
                     // 왼쪽 버튼(col=0) 다음에 넓은 중앙 공간 — 더블탭 영역
-                    if (col == 0) {
-                        val actionLabel = when (row) {
-                            0 -> "삭제"
-                            1 -> "확정"
-                            else -> "완료"
-                        }
-                        Box(
-                            modifier = Modifier
-                                .weight(1.0f)
-                                .fillMaxHeight()
-                                .clickable { runCenterAction(row) },
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(
-                                text = actionLabel,
-                                color = SensableDarkButtonIdleText,
-                                fontSize = 14.sp,
-                                textAlign = TextAlign.Center
-                            )
-                        }
-                    }
                 }
+            }
+        }
+
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(64.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Button(
+                onClick = { runCenterAction(0) },
+                modifier = Modifier.weight(1f).fillMaxHeight(),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = SensableDarkButtonIdle,
+                    contentColor = SensableDarkButtonIdleText
+                )
+            ) {
+                Text("삭제", fontSize = 14.sp)
+            }
+            Button(
+                onClick = { runCenterAction(1) },
+                modifier = Modifier.weight(2f).fillMaxHeight(),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = SensableBlue,
+                    contentColor = SensableBlueContent
+                )
+            ) {
+                Text("글자 입력", fontSize = 14.sp)
+            }
+            Button(
+                onClick = { runCenterAction(2) },
+                modifier = Modifier.weight(1f).fillMaxHeight(),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = SensableDarkButtonIdle,
+                    contentColor = SensableDarkButtonIdleText
+                )
+            ) {
+                Text("완료", fontSize = 14.sp)
             }
         }
     }
