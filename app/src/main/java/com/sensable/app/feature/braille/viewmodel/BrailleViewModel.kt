@@ -36,13 +36,20 @@ class BrailleViewModel @Inject constructor(
     fun onSwipeRight() {
         val state = _uiState.value
         val dots = state.currentCellDots
-        if (dots.isEmpty()) return
+        if (dots.isEmpty()) {
+            ttsManager.speak("선택한 점이 없습니다")
+            return
+        }
 
-        val decoded = BrailleDecoder.decodeNumber(dots)?.toString() ?: return
+        val decoded = BrailleDecoder.decodeNumber(dots)?.toString()
+        if (decoded == null) {
+            ttsManager.speak("인식할 수 없는 점자입니다")
+            return
+        }
 
         val newText = state.inputText + decoded
         val spoken = if (state.mode == BrailleMode.TRANSFER_AMOUNT) "${newText}원" else decoded
-        ttsManager.speak(spoken)
+        ttsManager.speak("글자 입력, $spoken")
 
         _uiState.update {
             it.copy(
@@ -82,7 +89,7 @@ class BrailleViewModel @Inject constructor(
         when (state.mode) {
             BrailleMode.TRANSFER_RECIPIENT -> {
                 val recipient = "이지영"
-                ttsManager.speak("${recipient}님 계좌로 확인되었습니다.")
+                ttsManager.speak("완료, ${recipient}님 계좌로 확인되었습니다.")
                 _uiState.update {
                     it.copy(
                         accountEntryCompleted = AccountEntryResult(
@@ -94,7 +101,7 @@ class BrailleViewModel @Inject constructor(
             }
             BrailleMode.TRANSFER_AMOUNT -> {
                 val formattedAmount = "%,d원".format(state.inputText.toLongOrNull() ?: 0L)
-                ttsManager.speak("${formattedAmount} 입력 확인되었습니다.")
+                ttsManager.speak("완료, ${formattedAmount} 입력 확인되었습니다.")
                 _uiState.update { it.copy(amountEntryCompleted = state.inputText) }
             }
         }
@@ -106,7 +113,7 @@ class BrailleViewModel @Inject constructor(
 
         // 1. 현재 셀에 점이 선택된 상태 → 셀만 초기화
         if (state.currentCellDots.isNotEmpty()) {
-            ttsManager.speak("취소")
+            ttsManager.speak("삭제, 선택한 점을 모두 취소했습니다")
             _uiState.update { it.copy(currentCellDots = emptySet()) }
             return false
         }
@@ -116,7 +123,10 @@ class BrailleViewModel @Inject constructor(
         if (cells.isNotEmpty()) {
             val newCells = cells.dropLast(1)
             val rebuiltText = newCells.joinToString("") { BrailleDecoder.decodeNumber(it)?.toString() ?: "" }
-            ttsManager.speak(rebuiltText.ifEmpty { "모두 지워졌습니다" })
+            ttsManager.speak(
+                if (rebuiltText.isEmpty()) "삭제, 모두 지워졌습니다"
+                else "삭제, 현재 입력은 $rebuiltText"
+            )
             _uiState.update {
                 it.copy(
                     inputText = rebuiltText,
@@ -128,6 +138,7 @@ class BrailleViewModel @Inject constructor(
         }
 
         // 3. 더 되돌아갈 단계가 없으면 → 바텀시트를 닫는다
+        ttsManager.speak("삭제할 내용이 없습니다")
         return true
     }
 
