@@ -21,6 +21,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.semantics.paneTitle
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
@@ -77,6 +79,9 @@ fun BrailleBottomSheet(
     }
 
     ModalBottomSheet(
+        modifier = Modifier.semantics {
+            paneTitle = ""
+        },
         onDismissRequest = { onBackPress?.invoke() },
         sheetState = rememberModalBottomSheetState(
             skipPartiallyExpanded = true,
@@ -84,6 +89,7 @@ fun BrailleBottomSheet(
         ),
         containerColor = SensableDarkSurface.copy(alpha = 0.5f),
         contentColor = SensableDarkOnSurface.copy(alpha = 0.7f),
+        dragHandle = null,
     ) {
         Box(
             modifier = Modifier
@@ -93,12 +99,25 @@ fun BrailleBottomSheet(
             BrailleBottomSheetContent(
                 guideMessage = uiState.guideMessage,
                 currentCellDots = uiState.currentCellDots,
-                inputText = uiState.inputText,
+                inputText = when (uiState.mode) {
+                    BrailleMode.TRANSFER_RECIPIENT -> uiState.inputText + uiState.pendingDisplay
+                    BrailleMode.AI_RECOMMENDATION -> uiState.autocompleteSuggestion
+                    else -> uiState.inputText
+                },
                 recipientName = uiState.recipientName,
                 mode = uiState.mode,
                 onButtonClick = { dot -> viewModel.onBrailleButtonClick(dot) },
-                onSwipeRight = { viewModel.onSwipeRight() },
+                onSwipeRight = {
+                    if (uiState.mode == BrailleMode.TRANSFER_RECIPIENT &&
+                        uiState.currentCellDots == setOf(1, 2, 3, 4, 5, 6)
+                    ) {
+                        viewModel.onAiCorrection()
+                    } else {
+                        viewModel.onSwipeRight()
+                    }
+                },
                 onSwipeLeft = { if (viewModel.onSwipeLeft()) onDismiss() },
+                onAiCorrection = { viewModel.onAiCorrection() },
                 onDoubleTap = { viewModel.onDoubleTap() },
                 modifier = Modifier
                     .fillMaxWidth()
@@ -120,6 +139,7 @@ internal fun BrailleBottomSheetContent(
     onSwipeRight: () -> Unit,
     onDoubleTap: () -> Unit,
     onSwipeLeft: (() -> Unit)? = null,
+    onAiCorrection: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     Column(
@@ -183,6 +203,11 @@ internal fun BrailleBottomSheetContent(
             onSwipeLeft = onSwipeLeft,
             pressedDots = currentCellDots,
             onDoubleTap = onDoubleTap,
+            onAiCorrection = if (mode == BrailleMode.TRANSFER_RECIPIENT ||
+                mode == BrailleMode.AI_RECOMMENDATION
+            ) {
+                onAiCorrection
+            } else null,
             modifier = Modifier.weight(1f)
         )
     }

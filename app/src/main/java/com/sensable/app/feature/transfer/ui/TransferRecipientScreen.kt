@@ -2,6 +2,7 @@ package com.sensable.app.feature.transfer.ui
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -17,7 +18,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.Icon
@@ -31,6 +31,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -69,6 +70,10 @@ private val recentTransferRecipients = listOf(
 fun TransferRecipientScreen(
     navController: NavController,
 ) {
+    val openAccountInput = {
+        navController.navigate(Screen.TransferAccountInput.route)
+    }
+
     Scaffold(
         containerColor = Color.White,
         bottomBar = {
@@ -79,7 +84,7 @@ fun TransferRecipientScreen(
                     .padding(horizontal = 24.dp, vertical = 16.dp)
             ) {
                 OutlinedButton(
-                    onClick = { navController.navigate(Screen.TransferAccountInput.route) },
+                    onClick = openAccountInput,
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(56.dp),
@@ -126,6 +131,10 @@ fun TransferRecipientScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .border(BorderStroke(1.dp, Color(0xFFE0E0E0)), RoundedCornerShape(12.dp))
+                    .clickable(
+                        role = Role.Button,
+                        onClick = openAccountInput,
+                    )
                     .padding(horizontal = 16.dp, vertical = 14.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -141,20 +150,6 @@ fun TransferRecipientScreen(
                     color = Color(0xFF9E9E9E),
                     modifier = Modifier.weight(1f)
                 )
-                Surface(
-                    shape = CircleShape,
-                    color = Color.Black,
-                    modifier = Modifier.size(36.dp)
-                ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Icon(
-                            imageVector = Icons.Default.CameraAlt,
-                            contentDescription = "계좌번호 촬영",
-                            tint = Color.White,
-                            modifier = Modifier.size(18.dp)
-                        )
-                    }
-                }
             }
 
             Spacer(modifier = Modifier.height(20.dp))

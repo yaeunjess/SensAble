@@ -89,12 +89,6 @@ private class SwipeState {
 
 private class HoverInputState {
     var size = Size.Zero
-    var startX = 0f
-    var startY = 0f
-    var lastX = 0f
-    var lastY = 0f
-    var dot: Int? = null
-    var actionRow: Int? = null
 }
 
 @Composable
@@ -125,6 +119,7 @@ fun BrailleGrid(
     pressedDots: Set<Int> = emptySet(),
     onDoubleTap: (() -> Unit)? = null,
     onSwipeLeft: (() -> Unit)? = null,
+    onAiCorrection: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val swipe = remember { SwipeState() }
@@ -172,62 +167,47 @@ fun BrailleGrid(
             if (touchExplorationEnabled) {
                 Modifier
                     .clearAndSetSemantics {
-                        customActions = listOf(
+                        customActions = buildList {
+                            add(
                             CustomAccessibilityAction("선택한 점자 입력") {
                                 vibrateTap(context)
                                 onSwipeRight()
                                 true
-                            },
+                            })
+                            add(
                             CustomAccessibilityAction("삭제") {
                                 vibrateTap(context)
                                 onSwipeLeft?.invoke()
                                 true
-                            },
+                            })
+                            onAiCorrection?.let { requestAiCorrection ->
+                                add(
+                                    CustomAccessibilityAction("AI 입력 보정") {
+                                        vibrateTap(context)
+                                        requestAiCorrection()
+                                        true
+                                    }
+                                )
+                            }
+                            add(
                             CustomAccessibilityAction("전체 입력 완료") {
                                 vibrateTap(context)
                                 onDoubleTap?.invoke()
                                 true
-                            }
-                        )
+                            })
+                        }
                     }
                     .pointerInteropFilter { event ->
                         when (event.actionMasked) {
                             MotionEvent.ACTION_HOVER_ENTER -> {
-                                hover.startX = event.x
-                                hover.startY = event.y
-                                hover.lastX = event.x
-                                hover.lastY = event.y
-                                hover.dot = dotAt(event.x, event.y)
-                                hover.actionRow = actionRowAt(event.x, event.y)
+                                dotAt(event.x, event.y)?.let {
+                                    vibrateTap(context)
+                                    onButtonClick(it)
+                                } ?: actionRowAt(event.x, event.y)?.let(::runCenterAction)
                             }
 
-                            MotionEvent.ACTION_HOVER_MOVE -> {
-                                hover.lastX = event.x
-                                hover.lastY = event.y
-                                hover.dot = dotAt(event.x, event.y)
-                                hover.actionRow = actionRowAt(event.x, event.y)
-                            }
-
-                            MotionEvent.ACTION_HOVER_EXIT -> {
-                                hover.lastX = event.x
-                                hover.lastY = event.y
-                                val deltaX = hover.lastX - hover.startX
-                                val deltaY = hover.lastY - hover.startY
-                                val threshold = 80f * context.resources.displayMetrics.density
-                                when {
-                                    kotlin.math.abs(deltaX) >= threshold &&
-                                        kotlin.math.abs(deltaX) > kotlin.math.abs(deltaY) -> {
-                                        if (deltaX > 0f) onSwipeRight() else onSwipeLeft?.invoke()
-                                    }
-
-                                    else -> hover.dot?.let {
-                                        vibrateTap(context)
-                                        onButtonClick(it)
-                                    } ?: hover.actionRow?.let(::runCenterAction)
-                                }
-                                hover.dot = null
-                                hover.actionRow = null
-                            }
+                            MotionEvent.ACTION_HOVER_MOVE,
+                            MotionEvent.ACTION_HOVER_EXIT -> Unit
 
                             else -> return@pointerInteropFilter false
                         }
