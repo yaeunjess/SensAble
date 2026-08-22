@@ -19,16 +19,16 @@ class BrailleViewModel @Inject constructor(
     val uiState: StateFlow<BrailleUiState> = _uiState.asStateFlow()
 
     fun onBrailleButtonClick(dot: Int) {
-        ttsManager.speak(dot.toString())
         toggleDot(dot)
     }
 
     private fun toggleDot(dot: Int) {
         val current = _uiState.value.currentCellDots
         if (dot in current) {
-            ttsManager.speak("$dot 취소")
+            ttsManager.speak("${dot}번 취소")
             _uiState.update { it.copy(currentCellDots = current - dot) }
         } else {
+            ttsManager.speak("${dot}번")
             _uiState.update { it.copy(currentCellDots = current + dot) }
         }
     }

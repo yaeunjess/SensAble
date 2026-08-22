@@ -13,6 +13,7 @@ import android.view.Gravity
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
+import android.view.accessibility.AccessibilityManager
 import android.widget.Button
 import android.widget.LinearLayout
 import android.widget.TextView
@@ -43,6 +44,18 @@ internal class FinclueFlowActivity : Activity(), TextToSpeech.OnInitListener {
     private val dotButtons = mutableMapOf<Int, Button>()
     private lateinit var promptView: TextView
     private lateinit var valueView: TextView
+    private lateinit var brailleGrid: ViewGroup
+    private var accessibilityManager: AccessibilityManager? = null
+    private var touchExplorationEnabled = false
+    private var hoverStartX = 0f
+    private var hoverStartY = 0f
+    private var hoverLastX = 0f
+    private var hoverLastY = 0f
+    private var hoverDot: Int? = null
+    private val touchExplorationStateChangeListener =
+        AccessibilityManager.TouchExplorationStateChangeListener { enabled ->
+            updateBrailleGridAccessibility(enabled)
+        }
     private var tts: TextToSpeech? = null
     private var ttsReady = false
     private var delivered = false
@@ -60,6 +73,7 @@ internal class FinclueFlowActivity : Activity(), TextToSpeech.OnInitListener {
         scope.launch { sessionId.complete(dataStore.startSession()) }
         tts = TextToSpeech(this, this)
         setContentView(createContentView())
+        observeTouchExplorationState()
         showCurrentField()
     }
 
@@ -85,7 +99,17 @@ internal class FinclueFlowActivity : Activity(), TextToSpeech.OnInitListener {
         root.addView(promptView, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 0.65f))
         root.addView(valueView, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 0.35f))
 
-        val grid = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        val grid = object : LinearLayout(this) {
+            override fun dispatchHoverEvent(event: MotionEvent): Boolean {
+                return if (touchExplorationEnabled) {
+                    handleBrailleHoverEvent(event)
+                    true
+                } else {
+                    super.dispatchHoverEvent(event)
+                }
+            }
+        }.apply { orientation = LinearLayout.VERTICAL }
+        brailleGrid = grid
         // Writing direction: [4,1] / [5,2] / [6,3]. Decoder receives standard dot numbers.
         listOf(4 to 1, 5 to 2, 6 to 3).forEach { (left, right) ->
             val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
@@ -106,6 +130,74 @@ internal class FinclueFlowActivity : Activity(), TextToSpeech.OnInitListener {
         })
         root.setOnTouchListener { _, event -> detector.onTouchEvent(event) }
         return root
+    }
+
+    private fun observeTouchExplorationState() {
+        accessibilityManager = getSystemService(AccessibilityManager::class.java)
+        accessibilityManager?.let { manager ->
+            updateBrailleGridAccessibility(
+                manager.isEnabled && manager.isTouchExplorationEnabled
+            )
+            manager.addTouchExplorationStateChangeListener(
+                touchExplorationStateChangeListener
+            )
+        }
+    }
+
+    private fun updateBrailleGridAccessibility(touchExplorationEnabled: Boolean) {
+        if (!::brailleGrid.isInitialized) return
+        this.touchExplorationEnabled = touchExplorationEnabled
+        brailleGrid.importantForAccessibility = if (touchExplorationEnabled) {
+            // Only the SDK-owned six-dot input subtree is hidden. This does not alter
+            // View touch dispatch, so the existing click and gesture handlers remain.
+            View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS
+        } else {
+            View.IMPORTANT_FOR_ACCESSIBILITY_AUTO
+        }
+    }
+
+    private fun handleBrailleHoverEvent(event: MotionEvent) {
+        when (event.actionMasked) {
+            MotionEvent.ACTION_HOVER_ENTER -> {
+                hoverStartX = event.x
+                hoverStartY = event.y
+                hoverLastX = event.x
+                hoverLastY = event.y
+                hoverDot = dotAt(event.x, event.y)
+            }
+
+            MotionEvent.ACTION_HOVER_MOVE -> {
+                hoverLastX = event.x
+                hoverLastY = event.y
+                dotAt(event.x, event.y)?.let { hoverDot = it }
+            }
+
+            MotionEvent.ACTION_HOVER_EXIT -> {
+                hoverLastX = event.x
+                hoverLastY = event.y
+                val horizontalDistance = hoverLastX - hoverStartX
+                val verticalDistance = hoverLastY - hoverStartY
+                val swipeThreshold = 80f * resources.displayMetrics.density
+
+                when {
+                    kotlin.math.abs(horizontalDistance) >= swipeThreshold &&
+                        kotlin.math.abs(horizontalDistance) > kotlin.math.abs(verticalDistance) -> {
+                        if (horizontalDistance > 0f) confirmCell() else deleteLastCharacter()
+                    }
+
+                    else -> hoverDot?.let(::toggleDot)
+                }
+                hoverDot = null
+            }
+        }
+    }
+
+    private fun dotAt(x: Float, y: Float): Int? {
+        if (brailleGrid.width <= 0 || brailleGrid.height <= 0) return null
+        if (x < 0f || x >= brailleGrid.width || y < 0f || y >= brailleGrid.height) return null
+
+        val row = ((y / brailleGrid.height) * 3).toInt().coerceIn(0, 2)
+        return if (x < brailleGrid.width / 2f) 4 + row else 1 + row
     }
 
     private fun createDotButton(dot: Int) = Button(this).apply {
@@ -243,6 +335,10 @@ internal class FinclueFlowActivity : Activity(), TextToSpeech.OnInitListener {
     }
 
     override fun onDestroy() {
+        accessibilityManager?.removeTouchExplorationStateChangeListener(
+            touchExplorationStateChangeListener
+        )
+        accessibilityManager = null
         tts?.stop()
         tts?.shutdown()
         if (isFinishing && !delivered && ::pendingFlow.isInitialized) {

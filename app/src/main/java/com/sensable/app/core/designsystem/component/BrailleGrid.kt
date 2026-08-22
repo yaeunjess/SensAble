@@ -5,15 +5,18 @@ import android.os.Build
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
+import android.view.MotionEvent
+import android.view.accessibility.AccessibilityManager
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -22,12 +25,20 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.pointerInteropFilter
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -75,6 +86,37 @@ private class SwipeState {
     var hasFired = false
 }
 
+private class HoverInputState {
+    var size = Size.Zero
+    var startX = 0f
+    var startY = 0f
+    var lastX = 0f
+    var lastY = 0f
+    var dot: Int? = null
+    var actionRow: Int? = null
+}
+
+@Composable
+private fun rememberTouchExplorationEnabled(): Boolean {
+    val context = LocalContext.current
+    val manager = remember(context) {
+        context.getSystemService(Context.ACCESSIBILITY_SERVICE) as AccessibilityManager
+    }
+    var enabled by remember(manager) {
+        mutableStateOf(manager.isEnabled && manager.isTouchExplorationEnabled)
+    }
+
+    DisposableEffect(manager) {
+        val listener = AccessibilityManager.TouchExplorationStateChangeListener {
+            enabled = manager.isEnabled && it
+        }
+        manager.addTouchExplorationStateChangeListener(listener)
+        onDispose { manager.removeTouchExplorationStateChangeListener(listener) }
+    }
+    return enabled
+}
+
+@OptIn(ExperimentalComposeUiApi::class)
 @Composable
 fun BrailleGrid(
     onButtonClick: (dot: Int) -> Unit,
@@ -85,9 +127,94 @@ fun BrailleGrid(
     modifier: Modifier = Modifier
 ) {
     val swipe = remember { SwipeState() }
+    val hover = remember { HoverInputState() }
+    val touchExplorationEnabled = rememberTouchExplorationEnabled()
+    val context = LocalContext.current
+
+    fun dotAt(x: Float, y: Float): Int? {
+        if (hover.size.width <= 0f || hover.size.height <= 0f) return null
+        if (x < 0f || x >= hover.size.width || y < 0f || y >= hover.size.height) return null
+        val horizontalRatio = x / hover.size.width
+        val column = when {
+            horizontalRatio < 0.375f -> 0
+            horizontalRatio >= 0.625f -> 1
+            else -> return null
+        }
+        val row = ((y / hover.size.height) * 3).toInt().coerceIn(0, 2)
+        return row + (1 - column) * 3 + 1
+    }
+
+    fun actionRowAt(x: Float, y: Float): Int? {
+        if (hover.size.width <= 0f || hover.size.height <= 0f) return null
+        if (x < 0f || x >= hover.size.width || y < 0f || y >= hover.size.height) return null
+        val horizontalRatio = x / hover.size.width
+        if (horizontalRatio !in 0.375f..0.625f) return null
+        return ((y / hover.size.height) * 3).toInt().coerceIn(0, 2)
+    }
+
+    fun runCenterAction(row: Int) {
+        vibrateTap(context)
+        when (row) {
+            0 -> onSwipeLeft?.invoke()
+            1 -> onSwipeRight()
+            2 -> onDoubleTap?.invoke()
+        }
+    }
 
     var columnModifier = modifier
         .fillMaxWidth()
+        .onSizeChanged { hover.size = Size(it.width.toFloat(), it.height.toFloat()) }
+        .then(
+            if (touchExplorationEnabled) {
+                Modifier
+                    .clearAndSetSemantics { }
+                    .pointerInteropFilter { event ->
+                        when (event.actionMasked) {
+                            MotionEvent.ACTION_HOVER_ENTER -> {
+                                hover.startX = event.x
+                                hover.startY = event.y
+                                hover.lastX = event.x
+                                hover.lastY = event.y
+                                hover.dot = dotAt(event.x, event.y)
+                                hover.actionRow = actionRowAt(event.x, event.y)
+                            }
+
+                            MotionEvent.ACTION_HOVER_MOVE -> {
+                                hover.lastX = event.x
+                                hover.lastY = event.y
+                                hover.dot = dotAt(event.x, event.y)
+                                hover.actionRow = actionRowAt(event.x, event.y)
+                            }
+
+                            MotionEvent.ACTION_HOVER_EXIT -> {
+                                hover.lastX = event.x
+                                hover.lastY = event.y
+                                val deltaX = hover.lastX - hover.startX
+                                val deltaY = hover.lastY - hover.startY
+                                val threshold = 80f * context.resources.displayMetrics.density
+                                when {
+                                    kotlin.math.abs(deltaX) >= threshold &&
+                                        kotlin.math.abs(deltaX) > kotlin.math.abs(deltaY) -> {
+                                        if (deltaX > 0f) onSwipeRight() else onSwipeLeft?.invoke()
+                                    }
+
+                                    else -> hover.dot?.let {
+                                        vibrateTap(context)
+                                        onButtonClick(it)
+                                    } ?: hover.actionRow?.let(::runCenterAction)
+                                }
+                                hover.dot = null
+                                hover.actionRow = null
+                            }
+
+                            else -> return@pointerInteropFilter false
+                        }
+                        true
+                    }
+            } else {
+                Modifier
+            }
+        )
         .pointerInput(Unit) {
             detectDragGestures(
                 onDragStart = {
@@ -136,7 +263,27 @@ fun BrailleGrid(
                         modifier = Modifier.weight(1.5f)
                     )
                     // 왼쪽 버튼(col=0) 다음에 넓은 중앙 공간 — 더블탭 영역
-                    if (col == 0) Spacer(modifier = Modifier.weight(1.0f))
+                    if (col == 0) {
+                        val actionLabel = when (row) {
+                            0 -> "삭제"
+                            1 -> "확정"
+                            else -> "완료"
+                        }
+                        Box(
+                            modifier = Modifier
+                                .weight(1.0f)
+                                .fillMaxHeight()
+                                .clickable { runCenterAction(row) },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = actionLabel,
+                                color = SensableDarkButtonIdleText,
+                                fontSize = 14.sp,
+                                textAlign = TextAlign.Center
+                            )
+                        }
+                    }
                 }
             }
         }
