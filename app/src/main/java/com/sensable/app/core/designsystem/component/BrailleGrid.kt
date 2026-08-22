@@ -10,7 +10,6 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -83,9 +82,6 @@ fun BrailleGrid(
     pressedDots: Set<Int> = emptySet(),
     onDoubleTap: (() -> Unit)? = null,
     onSwipeLeft: (() -> Unit)? = null,
-    onSwipeUp: (() -> Unit)? = null,
-    isServiceSelectMode: Boolean = false,
-    isConfirmSelectMode: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     val swipe = remember { SwipeState() }
@@ -106,7 +102,6 @@ fun BrailleGrid(
                         when {
                             swipe.totalDragX > 80f  -> { swipe.hasFired = true; onSwipeRight() }
                             swipe.totalDragX < -80f -> { swipe.hasFired = true; onSwipeLeft?.invoke() }
-                            swipe.totalDragY < -80f -> { swipe.hasFired = true; onSwipeUp?.invoke() }
                         }
                     }
                 }
@@ -133,25 +128,13 @@ fun BrailleGrid(
                 repeat(2) { col ->
                     val dotNumber = row + (1 - col) * 3 + 1
                     val isLeftSide = (col == 0)
-                    val twoButtonMode = isServiceSelectMode || isConfirmSelectMode
-                    val showButton = !twoButtonMode || dotNumber in setOf(1, 4)
-                    if (showButton) {
-                        val label = when {
-                            isServiceSelectMode -> when (dotNumber) { 4 -> "송금하기"; 1 -> "잔액조회"; else -> "$dotNumber" }
-                            isConfirmSelectMode -> when (dotNumber) { 4 -> "예"; 1 -> "아니요"; else -> "$dotNumber" }
-                            else -> "$dotNumber"
-                        }
-                        BrailleButton(
-                            label = label,
-                            isPressed = dotNumber in pressedDots,
-                            isLeftSide = isLeftSide,
-                            onClick = { onButtonClick(dotNumber) },
-                            fixedFontSizeSp = if (isConfirmSelectMode) 22f else null,
-                            modifier = Modifier.weight(1.5f)
-                        )
-                    } else {
-                        Box(modifier = Modifier.weight(1.5f).fillMaxHeight())
-                    }
+                    BrailleButton(
+                        label = "$dotNumber",
+                        isPressed = dotNumber in pressedDots,
+                        isLeftSide = isLeftSide,
+                        onClick = { onButtonClick(dotNumber) },
+                        modifier = Modifier.weight(1.5f)
+                    )
                     // 왼쪽 버튼(col=0) 다음에 넓은 중앙 공간 — 더블탭 영역
                     if (col == 0) Spacer(modifier = Modifier.weight(1.0f))
                 }
@@ -178,7 +161,6 @@ private fun BrailleButton(
     isPressed: Boolean,
     isLeftSide: Boolean,
     onClick: () -> Unit,
-    fixedFontSizeSp: Float? = null,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -196,17 +178,19 @@ private fun BrailleButton(
         interactionSource = interactionSource,
         contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),
         colors = ButtonDefaults.buttonColors(
-            containerColor = if (active) SensableBlue else SensableDarkButtonIdle,
+            containerColor = (if (active) SensableBlue else SensableDarkButtonIdle).copy(alpha = 0.9f),
             contentColor = if (active) SensableBlueContent else SensableDarkButtonIdleText
+        ),
+        elevation = ButtonDefaults.buttonElevation(
+            defaultElevation = 6.dp,
+            pressedElevation = 2.dp,
+            focusedElevation = 6.dp,
+            hoveredElevation = 8.dp
         )
     ) {
         Text(
             text = label,
-            fontSize = fixedFontSizeSp?.sp ?: when {
-                label.length == 1 -> 36.sp
-                label.length <= 2 -> 24.sp
-                else -> 16.sp
-            },
+            fontSize = 36.sp,
             textAlign = TextAlign.Center
         )
     }

@@ -51,6 +51,8 @@ fun TransferCompleteScreen(
     navController: NavController,
     recipient: String = "이지영",
     amount: String = "50000",
+    accountNumber: String = "10203040506",
+    bankName: String = "카카오뱅크",
     viewModel: TransferCompleteViewModel = hiltViewModel()
 ) {
     val formattedAmount = formatAmount(amount)
@@ -155,7 +157,7 @@ fun TransferCompleteScreen(
                     horizontalArrangement = Arrangement.Center
                 ) {
                     Text(
-                        text = "국민 95420100041671",
+                        text = "$bankName $accountNumber",
                         style = MaterialTheme.typography.bodyMedium,
                         color = Color.Gray
                     )
