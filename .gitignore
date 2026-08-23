@@ -30,3 +30,12 @@ secrets.properties
 
 # Logs
 *.log
+
+# Local AI model artifacts
+tools/model/.venv/
+tools/model/.convert-venv/
+tools/model/.cmake/
+tools/model/models/
+tools/model/.cache/
+tools/model/third_party/
+tools/model/*.gguf

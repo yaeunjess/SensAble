@@ -5,30 +5,39 @@ import android.os.Build
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
+import android.view.MotionEvent
+import android.view.accessibility.AccessibilityManager
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.pointerInteropFilter
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -47,10 +56,10 @@ private fun vibrateTap(context: Context) {
         context.getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
     }
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-        vibrator.vibrate(VibrationEffect.createOneShot(80L, 200))
+        vibrator.vibrate(VibrationEffect.createOneShot(40L, 255))
     } else {
         @Suppress("DEPRECATION")
-        vibrator.vibrate(80L)
+        vibrator.vibrate(40L)
     }
 }
 
@@ -76,6 +85,31 @@ private class SwipeState {
     var hasFired = false
 }
 
+private class HoverInputState {
+    var size = Size.Zero
+}
+
+@Composable
+private fun rememberTouchExplorationEnabled(): Boolean {
+    val context = LocalContext.current
+    val manager = remember(context) {
+        context.getSystemService(Context.ACCESSIBILITY_SERVICE) as AccessibilityManager
+    }
+    var enabled by remember(manager) {
+        mutableStateOf(manager.isEnabled && manager.isTouchExplorationEnabled)
+    }
+
+    DisposableEffect(manager) {
+        val listener = AccessibilityManager.TouchExplorationStateChangeListener {
+            enabled = manager.isEnabled && it
+        }
+        manager.addTouchExplorationStateChangeListener(listener)
+        onDispose { manager.removeTouchExplorationStateChangeListener(listener) }
+    }
+    return enabled
+}
+
+@OptIn(ExperimentalComposeUiApi::class)
 @Composable
 fun BrailleGrid(
     onButtonClick: (dot: Int) -> Unit,
@@ -83,15 +117,58 @@ fun BrailleGrid(
     pressedDots: Set<Int> = emptySet(),
     onDoubleTap: (() -> Unit)? = null,
     onSwipeLeft: (() -> Unit)? = null,
-    onSwipeUp: (() -> Unit)? = null,
-    isServiceSelectMode: Boolean = false,
-    isConfirmSelectMode: Boolean = false,
+    onAiCorrection: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val swipe = remember { SwipeState() }
+    val hover = remember { HoverInputState() }
+    val touchExplorationEnabled = rememberTouchExplorationEnabled()
+    val context = LocalContext.current
 
-    var columnModifier = modifier
+    fun dotAt(x: Float, y: Float): Int? {
+        if (hover.size.width <= 0f || hover.size.height <= 0f) return null
+        if (x < 0f || x >= hover.size.width || y < 0f || y >= hover.size.height) return null
+        val column = if (x < hover.size.width / 2f) 0 else 1
+        val row = ((y / hover.size.height) * 3).toInt().coerceIn(0, 2)
+        return row + (1 - column) * 3 + 1
+    }
+
+    fun runCenterAction(row: Int) {
+        vibrateTap(context)
+        when (row) {
+            0 -> onSwipeLeft?.invoke()
+            1 -> onSwipeRight()
+            2 -> onDoubleTap?.invoke()
+        }
+    }
+
+    var dotAreaModifier = Modifier
         .fillMaxWidth()
+        .onSizeChanged { hover.size = Size(it.width.toFloat(), it.height.toFloat()) }
+        .then(
+            if (touchExplorationEnabled) {
+                Modifier
+                    .clearAndSetSemantics { }
+                    .pointerInteropFilter { event ->
+                        when (event.actionMasked) {
+                            MotionEvent.ACTION_HOVER_ENTER -> {
+                                dotAt(event.x, event.y)?.let {
+                                    vibrateTap(context)
+                                    onButtonClick(it)
+                                }
+                            }
+
+                            MotionEvent.ACTION_HOVER_MOVE,
+                            MotionEvent.ACTION_HOVER_EXIT -> Unit
+
+                            else -> return@pointerInteropFilter false
+                        }
+                        true
+                    }
+            } else {
+                Modifier
+            }
+        )
         .pointerInput(Unit) {
             detectDragGestures(
                 onDragStart = {
@@ -106,7 +183,6 @@ fun BrailleGrid(
                         when {
                             swipe.totalDragX > 80f  -> { swipe.hasFired = true; onSwipeRight() }
                             swipe.totalDragX < -80f -> { swipe.hasFired = true; onSwipeLeft?.invoke() }
-                            swipe.totalDragY < -80f -> { swipe.hasFired = true; onSwipeUp?.invoke() }
                         }
                     }
                 }
@@ -114,47 +190,78 @@ fun BrailleGrid(
         }
 
     if (onDoubleTap != null) {
-        columnModifier = columnModifier.pointerInput("doubleTap") {
+        dotAreaModifier = dotAreaModifier.pointerInput("doubleTap") {
             detectTapGestures(onDoubleTap = { onDoubleTap() })
         }
     }
 
     Column(
-        modifier = columnModifier,
+        modifier = modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        repeat(3) { row ->
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                repeat(2) { col ->
-                    val dotNumber = row + (1 - col) * 3 + 1
-                    val isLeftSide = (col == 0)
-                    val twoButtonMode = isServiceSelectMode || isConfirmSelectMode
-                    val showButton = !twoButtonMode || dotNumber in setOf(1, 4)
-                    if (showButton) {
-                        val label = when {
-                            isServiceSelectMode -> when (dotNumber) { 4 -> "송금하기"; 1 -> "잔액조회"; else -> "$dotNumber" }
-                            isConfirmSelectMode -> when (dotNumber) { 4 -> "예"; 1 -> "아니요"; else -> "$dotNumber" }
-                            else -> "$dotNumber"
-                        }
+        Column(
+            modifier = dotAreaModifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            repeat(3) { row ->
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    repeat(2) { col ->
+                        val dotNumber = row + (1 - col) * 3 + 1
+                        val isLeftSide = (col == 0)
                         BrailleButton(
-                            label = label,
+                            label = "$dotNumber",
                             isPressed = dotNumber in pressedDots,
                             isLeftSide = isLeftSide,
                             onClick = { onButtonClick(dotNumber) },
-                            fixedFontSizeSp = if (isConfirmSelectMode) 22f else null,
-                            modifier = Modifier.weight(1.5f)
+                            modifier = Modifier.weight(1f)
                         )
-                    } else {
-                        Box(modifier = Modifier.weight(1.5f).fillMaxHeight())
                     }
-                    // 왼쪽 버튼(col=0) 다음에 넓은 중앙 공간 — 더블탭 영역
-                    if (col == 0) Spacer(modifier = Modifier.weight(1.0f))
                 }
+            }
+        }
+
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(64.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Button(
+                onClick = { runCenterAction(0) },
+                modifier = Modifier.weight(1f).fillMaxHeight(),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = SensableDarkButtonIdle,
+                    contentColor = SensableDarkButtonIdleText
+                )
+            ) {
+                Text("삭제", fontSize = 14.sp)
+            }
+            Button(
+                onClick = { runCenterAction(1) },
+                modifier = Modifier.weight(2f).fillMaxHeight(),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = SensableBlue,
+                    contentColor = SensableBlueContent
+                )
+            ) {
+                Text("글자 입력", fontSize = 14.sp)
+            }
+            Button(
+                onClick = { runCenterAction(2) },
+                modifier = Modifier.weight(1f).fillMaxHeight(),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = SensableDarkButtonIdle,
+                    contentColor = SensableDarkButtonIdleText
+                )
+            ) {
+                Text("완료", fontSize = 14.sp)
             }
         }
     }
@@ -178,7 +285,6 @@ private fun BrailleButton(
     isPressed: Boolean,
     isLeftSide: Boolean,
     onClick: () -> Unit,
-    fixedFontSizeSp: Float? = null,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -196,17 +302,19 @@ private fun BrailleButton(
         interactionSource = interactionSource,
         contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),
         colors = ButtonDefaults.buttonColors(
-            containerColor = if (active) SensableBlue else SensableDarkButtonIdle,
+            containerColor = (if (active) SensableBlue else SensableDarkButtonIdle).copy(alpha = 0.9f),
             contentColor = if (active) SensableBlueContent else SensableDarkButtonIdleText
+        ),
+        elevation = ButtonDefaults.buttonElevation(
+            defaultElevation = 6.dp,
+            pressedElevation = 2.dp,
+            focusedElevation = 6.dp,
+            hoveredElevation = 8.dp
         )
     ) {
         Text(
             text = label,
-            fontSize = fixedFontSizeSp?.sp ?: when {
-                label.length == 1 -> 36.sp
-                label.length <= 2 -> 24.sp
-                else -> 16.sp
-            },
+            fontSize = 36.sp,
             textAlign = TextAlign.Center
         )
     }

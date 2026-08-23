@@ -42,6 +42,11 @@ android {
 }
 
 dependencies {
+    // The demo shell intentionally consumes the packaged SDK artifact, not SDK source classes.
+    implementation(files(rootProject.layout.projectDirectory.file("finclue-sdk/build/outputs/aar/finclue-sdk-release.aar")))
+    // Local AARs do not carry Maven metadata, so runtime dependencies are declared by the host.
+    implementation(libs.androidx.room.runtime)
+    implementation(libs.androidx.room.ktx)
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.activity.compose)
@@ -83,4 +88,9 @@ dependencies {
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
     debugImplementation(libs.androidx.compose.ui.tooling)
     debugImplementation(libs.androidx.compose.ui.test.manifest)
+}
+
+// Ensure a clean checkout packages the SDK before the demo shell resolves the local AAR.
+tasks.matching { it.name == "preDebugBuild" || it.name == "preReleaseBuild" }.configureEach {
+    dependsOn(":finclue-sdk:assembleRelease")
 }

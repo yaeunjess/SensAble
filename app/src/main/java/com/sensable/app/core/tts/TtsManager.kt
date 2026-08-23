@@ -1,6 +1,7 @@
 package com.sensable.app.core.tts
 
 import android.content.Context
+import android.media.AudioAttributes
 import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -22,6 +23,12 @@ class TtsManager @Inject constructor(
                 tts?.language = Locale.KOREAN
                 tts?.setPitch(0.85f)
                 tts?.setSpeechRate(0.9f)
+                tts?.setAudioAttributes(
+                    AudioAttributes.Builder()
+                        .setUsage(AudioAttributes.USAGE_ASSISTANCE_ACCESSIBILITY)
+                        .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+                        .build()
+                )
                 isReady = true
                 pendingText?.let { speak(it) }
                 pendingText = null

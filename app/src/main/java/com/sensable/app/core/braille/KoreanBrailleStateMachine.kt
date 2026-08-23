@@ -42,8 +42,11 @@ class KoreanBrailleStateMachine {
     private var pendingFirstVowelDots: Set<Int>? = null
     private var tenseFromFinalContext = false
     private val output = StringBuilder()
+    var wasLastInputAccepted: Boolean = false
+        private set
 
     fun process(dots: Set<Int>): String {
+        val before = inputStateSnapshot()
         output.clear()
         when (state) {
             State.EXPECT_INITIAL -> handleExpectInitial(dots)
@@ -52,8 +55,17 @@ class KoreanBrailleStateMachine {
             State.EXPECT_TENSE_CONSONANT -> handleExpectTenseConsonant(dots)
             State.EXPECT_FINAL_OR_NEXT_INITIAL -> handleExpectFinalOrNext(dots)
         }
+        wasLastInputAccepted = output.isNotEmpty() || before != inputStateSnapshot()
         return output.toString()
     }
+
+    private fun inputStateSnapshot() = InputStateSnapshot(
+        state = state,
+        pendingInitial = pendingInitial,
+        pendingVowel = pendingVowel,
+        pendingFirstVowelDots = pendingFirstVowelDots,
+        tenseFromFinalContext = tenseFromFinalContext,
+    )
 
     fun flush(): String {
         output.clear()
@@ -76,13 +88,24 @@ class KoreanBrailleStateMachine {
         pendingVowel = null
         pendingFirstVowelDots = null
         tenseFromFinalContext = false
+        wasLastInputAccepted = false
         output.clear()
     }
+
+    private data class InputStateSnapshot(
+        val state: State,
+        val pendingInitial: Int?,
+        val pendingVowel: Int?,
+        val pendingFirstVowelDots: Set<Int>?,
+        val tenseFromFinalContext: Boolean,
+    )
 
     /** 현재 조합 중인 음절 미리보기. 초성만 있으면 자모, 초성+중성이면 결합 음절. */
     fun getPendingDisplay(): String {
         val initial = pendingInitial ?: return ""
-        val vowel = pendingVowel
+        val vowel = pendingVowel ?: pendingFirstVowelDots
+            ?.let(BrailleDecoder.vowelTable::get)
+            ?.let(VOWEL_INDEX::get)
         return if (vowel == null) {
             INITIAL_CONSONANTS.getOrElse(initial) { "" }
         } else {
