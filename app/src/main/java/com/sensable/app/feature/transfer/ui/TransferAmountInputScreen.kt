@@ -37,6 +37,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -122,6 +123,9 @@ fun TransferAmountInputScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
+                // 브라유 바텀시트가 뜨는 동안의 배경일 뿐이며 음성 안내는
+                // BrailleViewModel의 TTS가 전담하므로 TalkBack 중복 낭독을 막는다.
+                .clearAndSetSemantics { }
         ) {
             Row(
                 modifier = Modifier

@@ -21,6 +21,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.paneTitle
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.SpanStyle
@@ -30,6 +32,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.DialogWindowProvider
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
 import com.sensable.app.core.designsystem.component.BrailleGrid
@@ -91,6 +94,18 @@ fun BrailleBottomSheet(
         contentColor = SensableDarkOnSurface.copy(alpha = 0.7f),
         dragHandle = null,
     ) {
+        // ModalBottomSheet는 별도 Android Dialog/Window로 떠서, 제목을 지정하지 않으면
+        // TalkBack이 창 전환 시 앱 라벨("카카오뱅크")을 대신 읽는다. 빈 접근성 제목을 명시해 막는다.
+        val dialogWindowView = LocalView.current
+        LaunchedEffect(dialogWindowView) {
+            var parent = dialogWindowView.parent
+            while (parent != null && parent !is DialogWindowProvider) {
+                parent = parent.parent
+            }
+            val window = (parent as? DialogWindowProvider)?.window ?: return@LaunchedEffect
+            window.setTitle(" ")
+        }
+
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -153,7 +168,10 @@ internal fun BrailleBottomSheetContent(
                 .padding(horizontal = 24.dp)
                 .pointerInput(Unit) {
                     detectTapGestures(onDoubleTap = { onDoubleTap() })
-                },
+                }
+                // 안내문구/입력값은 시각 확인용이며 동일한 내용을 TtsManager가 이미
+                // 음성으로 안내하므로 TalkBack이 중복 낭독하지 않도록 숨긴다.
+                .clearAndSetSemantics { },
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {

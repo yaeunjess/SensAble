@@ -38,7 +38,7 @@ class BrailleViewModel @Inject constructor(
 
     fun onBrailleButtonClick(dot: Int) {
         if (_uiState.value.mode == BrailleMode.AI_RECOMMENDATION) {
-            ttsManager.speak("AI 추천 중입니다. 글자 입력으로 다음 추천을 들으세요")
+            ttsManager.speak("AI 추천 중입니다. 입력으로 다음 추천을 들으세요")
             return
         }
         toggleDot(dot)
@@ -48,10 +48,10 @@ class BrailleViewModel @Inject constructor(
         val current = _uiState.value.currentCellDots
         if (dot in current) {
             _uiState.update { it.copy(currentCellDots = current - dot) }
-            ttsManager.speak("${dot}번 취소")
+            ttsManager.speak("$dot 취소")
         } else {
             _uiState.update { it.copy(currentCellDots = current + dot) }
-            ttsManager.speak("${dot}번")
+            ttsManager.speak("$dot")
         }
     }
 
@@ -76,7 +76,7 @@ class BrailleViewModel @Inject constructor(
             }
             val pending = koreanStateMachine.getPendingDisplay()
             val newText = state.inputText + committed
-            ttsManager.speak("글자 입력, ${pending.ifEmpty { committed }}")
+            ttsManager.speak("입력, ${pending.ifEmpty { committed }}")
             _uiState.update {
                 it.copy(
                     currentCellDots = emptySet(),
@@ -95,7 +95,7 @@ class BrailleViewModel @Inject constructor(
         }
         val newText = state.inputText + decoded
         val spoken = if (state.mode == BrailleMode.TRANSFER_AMOUNT) "${newText}원" else decoded
-        ttsManager.speak("글자 입력, $spoken")
+        ttsManager.speak("입력, $spoken")
 
         _uiState.update {
             it.copy(
@@ -256,8 +256,6 @@ class BrailleViewModel @Inject constructor(
                 }
             }
             BrailleMode.TRANSFER_AMOUNT -> {
-                val formattedAmount = "%,d원".format(state.inputText.toLongOrNull() ?: 0L)
-                ttsManager.speak("완료, ${formattedAmount} 입력 확인되었습니다.")
                 _uiState.update { it.copy(amountEntryCompleted = state.inputText) }
             }
         }

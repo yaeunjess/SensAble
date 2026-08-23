@@ -28,6 +28,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
@@ -63,6 +64,9 @@ fun TransferAccountInputScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
+                // 이 화면은 브라유 바텀시트가 뜨기 전까지의 배경일 뿐이며 음성 안내는
+                // BrailleViewModel의 TTS가 전담하므로 TalkBack 중복 낭독을 막는다.
+                .clearAndSetSemantics { }
         ) {
             Row(
                 modifier = Modifier
