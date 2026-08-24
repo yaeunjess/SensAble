@@ -1,6 +1,7 @@
 package com.sensable.app.core.designsystem.component
 
 import android.content.Context
+import android.graphics.Region
 import android.os.Build
 import android.os.VibrationEffect
 import android.os.Vibrator
@@ -25,6 +26,7 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -35,13 +37,17 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.pointerInteropFilter
+import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.sensable.app.core.accessibility.BraillePassthroughController
 import com.sensable.app.ui.theme.SensableBlue
 import com.sensable.app.ui.theme.SensableBlueContent
 import com.sensable.app.ui.theme.SensableDarkButtonIdle
@@ -89,6 +95,16 @@ private class HoverInputState {
     var size = Size.Zero
 }
 
+private class ChordInputState {
+    val activePointerDots = mutableMapOf<Int, Int>()
+    val releasedDots = mutableSetOf<Int>()
+
+    fun reset() {
+        activePointerDots.clear()
+        releasedDots.clear()
+    }
+}
+
 @Composable
 fun rememberTouchExplorationEnabled(): Boolean {
     val context = LocalContext.current
@@ -115,15 +131,18 @@ fun BrailleGrid(
     onButtonClick: (dot: Int) -> Unit,
     onSwipeRight: () -> Unit,
     pressedDots: Set<Int> = emptySet(),
+    onChordInput: ((dots: Set<Int>) -> Unit)? = null,
     onDoubleTap: (() -> Unit)? = null,
     onSwipeLeft: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val swipe = remember { SwipeState() }
     val hover = remember { HoverInputState() }
+    val chord = remember { ChordInputState() }
     val touchExplorationEnabled = rememberTouchExplorationEnabled()
+    val passthroughActive by BraillePassthroughController.isPassthroughActive.collectAsState()
     val context = LocalContext.current
-    var actionRowWidth by remember { mutableStateOf(0f) }
+    val hostView = LocalView.current
 
     fun dotAt(x: Float, y: Float): Int? {
         if (hover.size.width <= 0f || hover.size.height <= 0f) return null
@@ -131,17 +150,6 @@ fun BrailleGrid(
         val column = if (x < hover.size.width / 2f) 0 else 1
         val row = ((y / hover.size.height) * 3).toInt().coerceIn(0, 2)
         return row + (1 - column) * 3 + 1
-    }
-
-    // 삭제(가중치 1) / 글자 입력(가중치 2) / 완료(가중치 1) 버튼 폭 비율에 맞춰 호버 위치를 구간으로 변환
-    fun actionSectionAt(x: Float): Int? {
-        if (actionRowWidth <= 0f || x < 0f || x >= actionRowWidth) return null
-        val ratio = x / actionRowWidth
-        return when {
-            ratio < 0.25f -> 0
-            ratio < 0.75f -> 1
-            else -> 2
-        }
     }
 
     fun runCenterAction(row: Int) {
@@ -153,11 +161,78 @@ fun BrailleGrid(
         }
     }
 
+    fun updateActivePointers(event: MotionEvent) {
+        for (index in 0 until event.pointerCount) {
+            val pointerId = event.getPointerId(index)
+            dotAt(event.getX(index), event.getY(index))?.let { dot ->
+                chord.activePointerDots[pointerId] = dot
+            }
+        }
+    }
+
+    fun handleChordEvent(event: MotionEvent): Boolean {
+        when (event.actionMasked) {
+            MotionEvent.ACTION_DOWN -> {
+                chord.reset()
+                updateActivePointers(event)
+            }
+
+            MotionEvent.ACTION_POINTER_DOWN,
+            MotionEvent.ACTION_MOVE -> updateActivePointers(event)
+
+            MotionEvent.ACTION_POINTER_UP -> {
+                updateActivePointers(event)
+                val pointerId = event.getPointerId(event.actionIndex)
+                chord.activePointerDots.remove(pointerId)?.let(chord.releasedDots::add)
+            }
+
+            MotionEvent.ACTION_UP -> {
+                updateActivePointers(event)
+                val dots = (chord.releasedDots + chord.activePointerDots.values).toSet()
+                chord.reset()
+                if (dots.isNotEmpty()) {
+                    vibrateTap(context)
+                    onChordInput?.invoke(dots) ?: dots.sorted().forEach(onButtonClick)
+                }
+            }
+
+            MotionEvent.ACTION_CANCEL -> chord.reset()
+            else -> return false
+        }
+        return true
+    }
+
+    DisposableEffect(Unit) {
+        onDispose { BraillePassthroughController.clearBrailleRegion() }
+    }
+
     var dotAreaModifier = Modifier
         .fillMaxWidth()
         .onSizeChanged { hover.size = Size(it.width.toFloat(), it.height.toFloat()) }
+        .onGloballyPositioned { coordinates ->
+            if (!touchExplorationEnabled || Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
+                BraillePassthroughController.clearBrailleRegion()
+                return@onGloballyPositioned
+            }
+
+            val bounds = coordinates.boundsInWindow()
+            val windowLocation = IntArray(2)
+            hostView.getLocationOnScreen(windowLocation)
+            BraillePassthroughController.setBrailleRegion(
+                Region(
+                    (windowLocation[0] + bounds.left).toInt(),
+                    (windowLocation[1] + bounds.top).toInt(),
+                    (windowLocation[0] + bounds.right).toInt(),
+                    (windowLocation[1] + bounds.bottom).toInt(),
+                )
+            )
+        }
         .then(
-            if (touchExplorationEnabled) {
+            if (passthroughActive) {
+                Modifier
+                    .clearAndSetSemantics { }
+                    .pointerInteropFilter { event -> handleChordEvent(event) }
+            } else if (touchExplorationEnabled) {
                 Modifier
                     .clearAndSetSemantics { }
                     .pointerInteropFilter { event ->
@@ -180,27 +255,39 @@ fun BrailleGrid(
                 Modifier
             }
         )
-        .pointerInput(Unit) {
-            detectDragGestures(
-                onDragStart = {
-                    swipe.totalDragX = 0f
-                    swipe.totalDragY = 0f
-                    swipe.hasFired = false
-                },
-                onDrag = { _, dragAmount ->
-                    swipe.totalDragX += dragAmount.x
-                    swipe.totalDragY += dragAmount.y
-                    if (!swipe.hasFired) {
-                        when {
-                            swipe.totalDragX > 80f  -> { swipe.hasFired = true; onSwipeRight() }
-                            swipe.totalDragX < -80f -> { swipe.hasFired = true; onSwipeLeft?.invoke() }
+        .then(
+            if (passthroughActive) {
+                Modifier
+            } else {
+                Modifier.pointerInput(Unit) {
+                    detectDragGestures(
+                        onDragStart = {
+                            swipe.totalDragX = 0f
+                            swipe.totalDragY = 0f
+                            swipe.hasFired = false
+                        },
+                        onDrag = { _, dragAmount ->
+                            swipe.totalDragX += dragAmount.x
+                            swipe.totalDragY += dragAmount.y
+                            if (!swipe.hasFired) {
+                                when {
+                                    swipe.totalDragX > 80f -> {
+                                        swipe.hasFired = true
+                                        onSwipeRight()
+                                    }
+                                    swipe.totalDragX < -80f -> {
+                                        swipe.hasFired = true
+                                        onSwipeLeft?.invoke()
+                                    }
+                                }
+                            }
                         }
-                    }
+                    )
                 }
-            )
-        }
+            }
+        )
 
-    if (onDoubleTap != null) {
+    if (onDoubleTap != null && !passthroughActive) {
         dotAreaModifier = dotAreaModifier.pointerInput("doubleTap") {
             detectTapGestures(onDoubleTap = { onDoubleTap() })
         }
@@ -240,29 +327,7 @@ fun BrailleGrid(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(64.dp)
-                .onSizeChanged { actionRowWidth = it.width.toFloat() }
-                .then(
-                    if (touchExplorationEnabled) {
-                        Modifier
-                            .clearAndSetSemantics { }
-                            .pointerInteropFilter { event ->
-                                when (event.actionMasked) {
-                                    MotionEvent.ACTION_HOVER_ENTER -> {
-                                        actionSectionAt(event.x)?.let { runCenterAction(it) }
-                                    }
-
-                                    MotionEvent.ACTION_HOVER_MOVE,
-                                    MotionEvent.ACTION_HOVER_EXIT -> Unit
-
-                                    else -> return@pointerInteropFilter false
-                                }
-                                true
-                            }
-                    } else {
-                        Modifier
-                    }
-                ),
+                .height(64.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {

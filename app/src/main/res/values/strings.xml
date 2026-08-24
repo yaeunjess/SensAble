@@ -1,3 +1,5 @@
 <resources>
     <string name="app_name">카카오뱅크</string>
+    <string name="braille_accessibility_service_name">SensAble 동시 점자 입력</string>
+    <string name="braille_accessibility_service_description">점자 입력 화면에서 여러 손가락의 동시 입력을 앱에 전달합니다.</string>
 </resources>

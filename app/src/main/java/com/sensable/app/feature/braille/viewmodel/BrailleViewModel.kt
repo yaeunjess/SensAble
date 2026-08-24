@@ -27,6 +27,24 @@ class BrailleViewModel @Inject constructor(
         toggleDot(dot)
     }
 
+    /** Toggle every dot in a released multi-finger chord as one atomic selection gesture. */
+    fun onBrailleChord(dots: Set<Int>) {
+        if (dots.isEmpty()) return
+        val current = _uiState.value.currentCellDots
+        val updated = current.toMutableSet().apply {
+            dots.forEach { dot ->
+                if (!add(dot)) remove(dot)
+            }
+        }
+        _uiState.update { it.copy(currentCellDots = updated) }
+
+        val spokenDots = dots.sorted().joinToString(", ") { "${it}번" }
+        ttsManager.speak(
+            if (updated.isEmpty()) "$spokenDots 취소"
+            else "$spokenDots 선택"
+        )
+    }
+
     private fun toggleDot(dot: Int) {
         val current = _uiState.value.currentCellDots
         if (dot in current) {
