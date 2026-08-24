@@ -49,7 +49,7 @@ import com.sensable.app.ui.theme.SensableTheme
 @Composable
 fun TransferCompleteScreen(
     navController: NavController,
-    recipient: String = "이지영",
+    recipient: String = "현준혁",
     amount: String = "50000",
     accountNumber: String = "10203040506",
     bankName: String = "카카오뱅크",

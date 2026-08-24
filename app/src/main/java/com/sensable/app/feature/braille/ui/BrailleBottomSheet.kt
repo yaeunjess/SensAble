@@ -16,11 +16,14 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.paneTitle
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.SpanStyle
@@ -30,9 +33,11 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.DialogWindowProvider
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
 import com.sensable.app.core.designsystem.component.BrailleGrid
+import com.sensable.app.core.designsystem.component.rememberTouchExplorationEnabled
 import com.sensable.app.core.navigation.Screen
 import com.sensable.app.feature.braille.viewmodel.BrailleMode
 import com.sensable.app.feature.braille.viewmodel.BrailleViewModel
@@ -91,6 +96,16 @@ fun BrailleBottomSheet(
         contentColor = SensableDarkOnSurface.copy(alpha = 0.7f),
         dragHandle = null,
     ) {
+        // 바텀시트가 뜰 때 TalkBack이 다이얼로그 창 제목(앱 이름)을 읽어버리는 것을 방지.
+        // 이 다이얼로그는 FEATURE_NO_TITLE로 만들어져 있어 Window.setTitle()은 타이틀 뷰가 없어 무시되므로,
+        // TalkBack이 실제로 참조하는 WindowManager.LayoutParams.title을 직접 갱신해야 함.
+        val dialogView = LocalView.current
+        SideEffect {
+            (dialogView.parent as? DialogWindowProvider)?.window?.let { window ->
+                window.attributes = window.attributes.apply { title = " " }
+            }
+        }
+
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -99,25 +114,12 @@ fun BrailleBottomSheet(
             BrailleBottomSheetContent(
                 guideMessage = uiState.guideMessage,
                 currentCellDots = uiState.currentCellDots,
-                inputText = when (uiState.mode) {
-                    BrailleMode.TRANSFER_RECIPIENT -> uiState.inputText + uiState.pendingDisplay
-                    BrailleMode.AI_RECOMMENDATION -> uiState.autocompleteSuggestion
-                    else -> uiState.inputText
-                },
+                inputText = uiState.inputText,
                 recipientName = uiState.recipientName,
                 mode = uiState.mode,
                 onButtonClick = { dot -> viewModel.onBrailleButtonClick(dot) },
-                onSwipeRight = {
-                    if (uiState.mode == BrailleMode.TRANSFER_RECIPIENT &&
-                        uiState.currentCellDots == setOf(1, 2, 3, 4, 5, 6)
-                    ) {
-                        viewModel.onAiCorrection()
-                    } else {
-                        viewModel.onSwipeRight()
-                    }
-                },
+                onSwipeRight = { viewModel.onSwipeRight() },
                 onSwipeLeft = { if (viewModel.onSwipeLeft()) onDismiss() },
-                onAiCorrection = { viewModel.onAiCorrection() },
                 onDoubleTap = { viewModel.onDoubleTap() },
                 modifier = Modifier
                     .fillMaxWidth()
@@ -139,9 +141,10 @@ internal fun BrailleBottomSheetContent(
     onSwipeRight: () -> Unit,
     onDoubleTap: () -> Unit,
     onSwipeLeft: (() -> Unit)? = null,
-    onAiCorrection: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
+    val touchExplorationEnabled = rememberTouchExplorationEnabled()
+
     Column(
         modifier = modifier,
         horizontalAlignment = Alignment.CenterHorizontally
@@ -153,7 +156,11 @@ internal fun BrailleBottomSheetContent(
                 .padding(horizontal = 24.dp)
                 .pointerInput(Unit) {
                     detectTapGestures(onDoubleTap = { onDoubleTap() })
-                },
+                }
+                .then(
+                    // TTS가 이미 안내를 읽어주므로 TalkBack이 화면 텍스트를 중복으로 읽지 않도록 접근성 트리에서 제외
+                    if (touchExplorationEnabled) Modifier.clearAndSetSemantics { } else Modifier
+                ),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
@@ -203,11 +210,6 @@ internal fun BrailleBottomSheetContent(
             onSwipeLeft = onSwipeLeft,
             pressedDots = currentCellDots,
             onDoubleTap = onDoubleTap,
-            onAiCorrection = if (mode == BrailleMode.TRANSFER_RECIPIENT ||
-                mode == BrailleMode.AI_RECOMMENDATION
-            ) {
-                onAiCorrection
-            } else null,
             modifier = Modifier.weight(1f)
         )
     }

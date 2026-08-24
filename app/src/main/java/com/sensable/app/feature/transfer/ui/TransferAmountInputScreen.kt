@@ -55,7 +55,7 @@ private const val MAX_AMOUNT_DIGITS = 10
 @Composable
 fun TransferAmountInputScreen(
     navController: NavController,
-    recipient: String = "이지영",
+    recipient: String = "현준혁",
     accountNumber: String = "10203040506",
     bankName: String = "카카오뱅크",
 ) {

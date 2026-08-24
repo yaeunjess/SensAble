@@ -57,7 +57,7 @@ import com.sensable.app.ui.theme.SensableTheme
 @Composable
 fun TransferMemoScreen(
     navController: NavController,
-    recipient: String = "이지영",
+    recipient: String = "현준혁",
     accountNumber: String = "10203040506",
     amount: String = "0",
     bankName: String = "카카오뱅크",

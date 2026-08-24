@@ -90,7 +90,7 @@ private class HoverInputState {
 }
 
 @Composable
-private fun rememberTouchExplorationEnabled(): Boolean {
+fun rememberTouchExplorationEnabled(): Boolean {
     val context = LocalContext.current
     val manager = remember(context) {
         context.getSystemService(Context.ACCESSIBILITY_SERVICE) as AccessibilityManager
@@ -117,13 +117,13 @@ fun BrailleGrid(
     pressedDots: Set<Int> = emptySet(),
     onDoubleTap: (() -> Unit)? = null,
     onSwipeLeft: (() -> Unit)? = null,
-    onAiCorrection: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val swipe = remember { SwipeState() }
     val hover = remember { HoverInputState() }
     val touchExplorationEnabled = rememberTouchExplorationEnabled()
     val context = LocalContext.current
+    var actionRowWidth by remember { mutableStateOf(0f) }
 
     fun dotAt(x: Float, y: Float): Int? {
         if (hover.size.width <= 0f || hover.size.height <= 0f) return null
@@ -131,6 +131,17 @@ fun BrailleGrid(
         val column = if (x < hover.size.width / 2f) 0 else 1
         val row = ((y / hover.size.height) * 3).toInt().coerceIn(0, 2)
         return row + (1 - column) * 3 + 1
+    }
+
+    // 삭제(가중치 1) / 글자 입력(가중치 2) / 완료(가중치 1) 버튼 폭 비율에 맞춰 호버 위치를 구간으로 변환
+    fun actionSectionAt(x: Float): Int? {
+        if (actionRowWidth <= 0f || x < 0f || x >= actionRowWidth) return null
+        val ratio = x / actionRowWidth
+        return when {
+            ratio < 0.25f -> 0
+            ratio < 0.75f -> 1
+            else -> 2
+        }
     }
 
     fun runCenterAction(row: Int) {
@@ -229,7 +240,29 @@ fun BrailleGrid(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(64.dp),
+                .height(64.dp)
+                .onSizeChanged { actionRowWidth = it.width.toFloat() }
+                .then(
+                    if (touchExplorationEnabled) {
+                        Modifier
+                            .clearAndSetSemantics { }
+                            .pointerInteropFilter { event ->
+                                when (event.actionMasked) {
+                                    MotionEvent.ACTION_HOVER_ENTER -> {
+                                        actionSectionAt(event.x)?.let { runCenterAction(it) }
+                                    }
+
+                                    MotionEvent.ACTION_HOVER_MOVE,
+                                    MotionEvent.ACTION_HOVER_EXIT -> Unit
+
+                                    else -> return@pointerInteropFilter false
+                                }
+                                true
+                            }
+                    } else {
+                        Modifier
+                    }
+                ),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -247,8 +280,8 @@ fun BrailleGrid(
                 onClick = { runCenterAction(1) },
                 modifier = Modifier.weight(2f).fillMaxHeight(),
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = SensableBlue,
-                    contentColor = SensableBlueContent
+                    containerColor = SensableDarkButtonIdle,
+                    contentColor = SensableDarkButtonIdleText
                 )
             ) {
                 Text("글자 입력", fontSize = 14.sp)
