@@ -5,23 +5,17 @@ package com.sensable.app.core.braille
  *
  * 상태 전이:
  *   EXPECT_INITIAL → (초성 셀) → EXPECT_VOWEL
- *   EXPECT_INITIAL → (된소리표 {6}) → EXPECT_TENSE_CONSONANT
  *   EXPECT_INITIAL → (단순 모음 셀) → ㅇ 초성으로 처리 → EXPECT_FINAL_OR_NEXT_INITIAL
  *   EXPECT_INITIAL → (복합 모음 첫 셀) → ㅇ 초성으로 처리 → EXPECT_COMPOUND_VOWEL_CONTINUATION
  *   EXPECT_VOWEL   → (단순 모음 셀) → EXPECT_FINAL_OR_NEXT_INITIAL
  *   EXPECT_VOWEL   → (복합 모음 첫 셀) → EXPECT_COMPOUND_VOWEL_CONTINUATION
  *   EXPECT_COMPOUND_VOWEL_CONTINUATION → (ㅐ 셀) → 복합 모음 확정 → EXPECT_FINAL_OR_NEXT_INITIAL
  *   EXPECT_COMPOUND_VOWEL_CONTINUATION → (그 외) → 첫 셀을 단독 모음으로 확정 후 현재 셀 재처리
- *   EXPECT_TENSE_CONSONANT → (된소리 가능 초성 셀) → 된소리 초성 확정 → EXPECT_VOWEL
- *   EXPECT_TENSE_CONSONANT → (된소리 가능 종성 셀, 종성 컨텍스트) → 된소리 받침으로 음절 완성 → EXPECT_INITIAL
- *   EXPECT_TENSE_CONSONANT → (그 외) → {6}을 ㅅ초성으로 확정 후 현재 셀 재처리
  *   EXPECT_FINAL_OR_NEXT_INITIAL → (종성 셀) → 음절 완성 → EXPECT_INITIAL
- *   EXPECT_FINAL_OR_NEXT_INITIAL → (된소리표 {6}) → EXPECT_TENSE_CONSONANT (종성 컨텍스트)
  *   EXPECT_FINAL_OR_NEXT_INITIAL → (초성 셀) → 이전 음절 완성 후 새 초성 → EXPECT_VOWEL
  *   EXPECT_FINAL_OR_NEXT_INITIAL → (단순 모음 셀) → 이전 음절 완성 후 ㅇ 초성 → EXPECT_FINAL_OR_NEXT_INITIAL
  *   EXPECT_FINAL_OR_NEXT_INITIAL → (복합 모음 첫 셀) → 이전 음절 완성 후 ㅇ 초성 → EXPECT_COMPOUND_VOWEL_CONTINUATION
  *
- * 된소리표({6})는 ㅅ초성과 점형이 동일하므로 다음 셀 확인 후 구분.
  * 복합 모음(ㅟ/ㅒ/ㅙ/ㅞ)은 모두 첫 번째 셀 + ㅐ{1,2,3,5} 두 번째 셀의 조합으로 입력.
  * process()는 음절이 완성될 때만 문자를 반환하며, 미완성이면 빈 문자열 반환.
  * 입력 필드 제출 시 flush()를 호출해 마지막 미완성 음절을 강제 완성해야 함.
@@ -32,7 +26,6 @@ class KoreanBrailleStateMachine {
         EXPECT_INITIAL,
         EXPECT_VOWEL,
         EXPECT_COMPOUND_VOWEL_CONTINUATION,
-        EXPECT_TENSE_CONSONANT,
         EXPECT_FINAL_OR_NEXT_INITIAL,
     }
 
@@ -40,7 +33,6 @@ class KoreanBrailleStateMachine {
     private var pendingInitial: Int? = null
     private var pendingVowel: Int? = null
     private var pendingFirstVowelDots: Set<Int>? = null
-    private var tenseFromFinalContext = false
     private val output = StringBuilder()
     var wasLastInputAccepted: Boolean = false
         private set
@@ -52,7 +44,6 @@ class KoreanBrailleStateMachine {
             State.EXPECT_INITIAL -> handleExpectInitial(dots)
             State.EXPECT_VOWEL -> handleExpectVowel(dots)
             State.EXPECT_COMPOUND_VOWEL_CONTINUATION -> handleExpectCompoundVowelContinuation(dots)
-            State.EXPECT_TENSE_CONSONANT -> handleExpectTenseConsonant(dots)
             State.EXPECT_FINAL_OR_NEXT_INITIAL -> handleExpectFinalOrNext(dots)
         }
         wasLastInputAccepted = output.isNotEmpty() || before != inputStateSnapshot()
@@ -64,17 +55,12 @@ class KoreanBrailleStateMachine {
         pendingInitial = pendingInitial,
         pendingVowel = pendingVowel,
         pendingFirstVowelDots = pendingFirstVowelDots,
-        tenseFromFinalContext = tenseFromFinalContext,
     )
 
     fun flush(): String {
         output.clear()
         if (state == State.EXPECT_COMPOUND_VOWEL_CONTINUATION) {
             commitPendingFirstVowelAsStandalone()
-        }
-        if (state == State.EXPECT_TENSE_CONSONANT) {
-            // 된소리표만 받고 입력 종료 → 현재 음절 그대로 완성, 된소리표는 무시
-            tenseFromFinalContext = false
         }
         assemblePendingSyllable(finalIndex = 0)
         val result = output.toString()
@@ -87,7 +73,6 @@ class KoreanBrailleStateMachine {
         pendingInitial = null
         pendingVowel = null
         pendingFirstVowelDots = null
-        tenseFromFinalContext = false
         wasLastInputAccepted = false
         output.clear()
     }
@@ -97,7 +82,6 @@ class KoreanBrailleStateMachine {
         val pendingInitial: Int?,
         val pendingVowel: Int?,
         val pendingFirstVowelDots: Set<Int>?,
-        val tenseFromFinalContext: Boolean,
     )
 
     /** 현재 조합 중인 음절 미리보기. 초성만 있으면 자모, 초성+중성이면 결합 음절. */
@@ -114,11 +98,6 @@ class KoreanBrailleStateMachine {
     }
 
     private fun handleExpectInitial(dots: Set<Int>) {
-        if (dots == TENSE_PREFIX) {
-            tenseFromFinalContext = false
-            state = State.EXPECT_TENSE_CONSONANT
-            return
-        }
         val consonant = BrailleDecoder.initialConsonantTable[dots]
         if (consonant != null) {
             pendingInitial = INITIAL_INDEX[consonant]
@@ -177,56 +156,12 @@ class KoreanBrailleStateMachine {
         state = State.EXPECT_FINAL_OR_NEXT_INITIAL
     }
 
-    private fun handleExpectTenseConsonant(dots: Set<Int>) {
-        // 된소리 초성 확인 (초성/종성 컨텍스트 공통)
-        val tenseInitial = TENSE_INITIAL_MAP[dots]
-        if (tenseInitial != null) {
-            if (tenseFromFinalContext) assemblePendingSyllable(finalIndex = 0)
-            pendingInitial = INITIAL_INDEX[tenseInitial]
-            tenseFromFinalContext = false
-            state = State.EXPECT_VOWEL
-            return
-        }
-        // 된소리 종성 확인 (종성 컨텍스트에서만)
-        if (tenseFromFinalContext) {
-            val tenseFinal = TENSE_FINAL_MAP[dots]
-            if (tenseFinal != null) {
-                assemblePendingSyllable(FINAL_INDEX[tenseFinal] ?: 0)
-                tenseFromFinalContext = false
-                state = State.EXPECT_INITIAL
-                return
-            }
-        }
-        // 된소리 아님 → {6}을 ㅅ초성으로 확정, 현재 셀 재처리
-        if (tenseFromFinalContext) assemblePendingSyllable(finalIndex = 0)
-        pendingInitial = INITIAL_INDEX["ㅅ"]
-        tenseFromFinalContext = false
-        if (dots in COMPOUND_FIRST_CELLS) {
-            pendingFirstVowelDots = dots
-            state = State.EXPECT_COMPOUND_VOWEL_CONTINUATION
-        } else {
-            val vowel = BrailleDecoder.vowelTable[dots]
-            if (vowel != null) {
-                pendingVowel = VOWEL_INDEX[vowel]
-                state = State.EXPECT_FINAL_OR_NEXT_INITIAL
-            } else {
-                state = State.EXPECT_VOWEL
-            }
-        }
-    }
-
     private fun handleExpectFinalOrNext(dots: Set<Int>) {
         // 종성 테이블 먼저 — 초성/종성 점형이 다르므로 겹치지 않음
         val finalConsonant = BrailleDecoder.finalConsonantTable[dots]
         if (finalConsonant != null) {
             assemblePendingSyllable(FINAL_INDEX[finalConsonant] ?: 0)
             state = State.EXPECT_INITIAL
-            return
-        }
-        // 된소리표 — 된소리 받침 또는 다음 음절 된소리 초성 가능
-        if (dots == TENSE_PREFIX) {
-            tenseFromFinalContext = true
-            state = State.EXPECT_TENSE_CONSONANT
             return
         }
         // 다음 음절의 초성
@@ -265,24 +200,6 @@ class KoreanBrailleStateMachine {
 
     companion object {
         // 유니코드 한글 음절 = 0xAC00 + 초성 * 21 * 28 + 중성 * 28 + 종성
-
-        // 된소리표: ㅅ초성{6}과 점형 동일 → State Machine이 다음 셀로 구분
-        private val TENSE_PREFIX: Set<Int> = setOf(6)
-
-        // 기본 초성 점형 → 된소리 초성
-        private val TENSE_INITIAL_MAP: Map<Set<Int>, String> = mapOf(
-            setOf(4) to "ㄲ",    // ㄱ → ㄲ
-            setOf(2, 4) to "ㄸ", // ㄷ → ㄸ
-            setOf(4, 5) to "ㅃ", // ㅂ → ㅃ
-            setOf(6) to "ㅆ",    // ㅅ → ㅆ
-            setOf(4, 6) to "ㅉ", // ㅈ → ㅉ
-        )
-
-        // 기본 종성 점형 → 된소리 종성 (ㄲ받침, ㅆ받침만 존재)
-        private val TENSE_FINAL_MAP: Map<Set<Int>, String> = mapOf(
-            setOf(1) to "ㄲ", // ㄱ받침 → ㄲ받침
-            setOf(3) to "ㅆ", // ㅅ받침 → ㅆ받침
-        )
 
         // 복합 모음 첫 번째 셀 집합 (ㅜ/ㅑ/ㅘ/ㅝ) — 다음 셀이 ㅐ이면 복합 모음으로 확정
         private val COMPOUND_FIRST_CELLS: Set<Set<Int>> = setOf(

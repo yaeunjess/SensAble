@@ -41,12 +41,8 @@ object BrailleDecoder {
      * [해결됨] ㅎ {2,4,5} — 중성 ㅚ {2,4,5}와 점형 충돌
      *   → 마찬가지로 State Machine이 상태(초성/중성)에 따라 테이블을 분리 조회하므로 해결.
      *
-     * [해결됨] ㅅ {6} — 된소리표와 점형 동일
-     *   State Machine이 EXPECT_INITIAL/EXPECT_FINAL_OR_NEXT_INITIAL에서 {6}을 먼저 가로채
-     *   EXPECT_TENSE_CONSONANT로 진입 후 다음 셀로 된소리 초성/종성(ㄲ/ㄸ/ㅃ/ㅆ/ㅉ, ㄲ받침/ㅆ받침)과 ㅅ초성을 구분.
-     *
-     * [참고] ㅇ — 초성 점자 없음 (의도적 생략)
-     *   모음 셀이 초성 없이 오면 State Machine이 ㅇ 초성으로 자동 처리함.
+     * 초성 ㅇ은 표준 표기에서는 생략하지만, 사용자가 명시적으로 입력하는 선택 표기
+     * {1,2,4,5}도 허용한다. 모음 셀이 초성 없이 오는 기존 입력도 계속 ㅇ으로 처리한다.
      */
     val initialConsonantTable: Map<Set<Int>, String> = mapOf(
         setOf(4) to "ㄱ",
@@ -55,7 +51,8 @@ object BrailleDecoder {
         setOf(5) to "ㄹ",
         setOf(1, 5) to "ㅁ",
         setOf(4, 5) to "ㅂ",
-        setOf(6) to "ㅅ",           // [해결됨] 된소리표와 점형 동일 → State Machine이 EXPECT_TENSE_CONSONANT로 처리
+        setOf(6) to "ㅅ",
+        setOf(1, 2, 4, 5) to "ㅇ", // 선택적으로 표기하는 초성 ㅇ
         setOf(4, 6) to "ㅈ",
         setOf(5, 6) to "ㅊ",
         setOf(1, 2, 4) to "ㅋ",
@@ -121,7 +118,7 @@ object BrailleDecoder {
         setOf(2, 3) to "ㅊ",
         setOf(2, 3, 5) to "ㅋ",
         setOf(2, 3, 6) to "ㅌ",
-        setOf(2, 4, 6) to "ㅍ",
+        setOf(2, 5, 6) to "ㅍ",
         setOf(3, 5, 6) to "ㅎ"
         // [미해결] 겹받침 미포함 — 점형 확인 후 이 테이블에 추가하면 State Machine 수정 없이 동작
     )
